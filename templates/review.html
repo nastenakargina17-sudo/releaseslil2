@@ -16,6 +16,14 @@
 <body>
   <h1>Review: {{ release.id }}</h1>
   <p>Дата релиза: <strong>{{ release.release_date }}</strong></p>
+  {% if review_user %}
+    <div class="inline" style="justify-content: space-between; margin-bottom: 16px;">
+      <p style="margin: 0;">Доступ подтверждён для <strong>{{ review_user.name }}</strong> ({{ review_user.email }})</p>
+      <form method="post" action="/auth/logout">
+        <button type="submit">Выйти</button>
+      </form>
+    </div>
+  {% endif %}
   {% if flash == "review_notified" %}
     <p style="color: green;">Сообщение о статусе ревью отправлено в Telegram.</p>
   {% elif flash == "digest_notified" %}

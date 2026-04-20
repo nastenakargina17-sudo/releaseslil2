@@ -1,4 +1,5 @@
 from app.clients.confluence import ConfluenceAPIClient
+from app.auth import build_review_entry_url
 from app.config import get_app_settings, get_confluence_settings, get_telegram_settings
 from app.notifications.telegram import (
     TelegramNotifier,
@@ -55,7 +56,12 @@ class TelegramBotService:
             release = get_release(release_id)
             items = list_items(release_id)
             release_date = release.release_date if release else "—"
-            review_url = f"{self.app_settings.base_url}/review/{release_id}" if self.app_settings.base_url else ""
+            review_path = f"/review/{release_id}"
+            review_url = (
+                build_review_entry_url(self.app_settings.base_url, review_path)
+                if self.app_settings.base_url
+                else ""
+            )
             self.notifier.send_message(
                 build_release_review_message(release_id, release_date, review_url),
                 chat_id=chat_id,

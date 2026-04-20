@@ -26,3 +26,15 @@ services:
         sync: false
       - key: APP_BASE_URL
         sync: false
+      - key: SESSION_SECRET
+        sync: false
+      - key: SESSION_HTTPS_ONLY
+        sync: false
+      - key: YANDEX_CLIENT_ID
+        sync: false
+      - key: YANDEX_CLIENT_SECRET
+        sync: false
+      - key: YANDEX_REDIRECT_URI
+        sync: false
+      - key: YANDEX_ALLOWED_EMAILS
+        sync: false

@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 from dataclasses import dataclass
+from typing import FrozenSet
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -39,6 +40,16 @@ class TelegramSettings:
 @dataclass(frozen=True)
 class AppSettings:
     base_url: str
+
+
+@dataclass(frozen=True)
+class AuthSettings:
+    session_secret: str
+    session_https_only: bool
+    yandex_client_id: str
+    yandex_client_secret: str
+    yandex_redirect_uri: str
+    allowed_review_emails: FrozenSet[str]
 
 
 def load_env_file() -> None:
@@ -81,3 +92,30 @@ def get_app_settings() -> AppSettings:
     return AppSettings(
         base_url=os.getenv("APP_BASE_URL", "").rstrip("/"),
     )
+
+
+def get_auth_settings() -> AuthSettings:
+    app_settings = get_app_settings()
+    return AuthSettings(
+        session_secret=os.getenv("SESSION_SECRET", "change-me-in-production"),
+        session_https_only=_get_bool_env(
+            "SESSION_HTTPS_ONLY",
+            default=app_settings.base_url.startswith("https://"),
+        ),
+        yandex_client_id=os.getenv("YANDEX_CLIENT_ID", ""),
+        yandex_client_secret=os.getenv("YANDEX_CLIENT_SECRET", ""),
+        yandex_redirect_uri=os.getenv("YANDEX_REDIRECT_URI", ""),
+        allowed_review_emails=frozenset(_parse_csv_env("YANDEX_ALLOWED_EMAILS")),
+    )
+
+
+def _get_bool_env(name: str, default: bool) -> bool:
+    raw_value = os.getenv(name)
+    if raw_value is None:
+        return default
+    return raw_value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _parse_csv_env(name: str) -> list[str]:
+    raw_value = os.getenv(name, "")
+    return [part.strip().lower() for part in raw_value.split(",") if part.strip()]

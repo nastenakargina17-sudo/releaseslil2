@@ -35,6 +35,12 @@ Configure integrations through environment variables:
 - `CONFLUENCE_RELEASE_SCHEDULE_PAGE_ID`
 - `TELEGRAM_BOT_TOKEN`
 - `TELEGRAM_CHAT_ID`
+- `SESSION_SECRET`
+- `SESSION_HTTPS_ONLY`
+- `YANDEX_CLIENT_ID`
+- `YANDEX_CLIENT_SECRET`
+- `YANDEX_REDIRECT_URI`
+- `YANDEX_ALLOWED_EMAILS`
 
 The MVP now supports:
 
@@ -61,3 +67,16 @@ Before deploying:
 - Review screen
 - Final digest screen
 - Mock import pipeline
+
+## Review Access
+
+The `/review/*` area is protected with Yandex OAuth and an email allowlist.
+
+Setup notes:
+
+1. Configure your Yandex OAuth app callback to `https://<your-domain>/auth/yandex/callback`.
+2. Put approved employee emails into `YANDEX_ALLOWED_EMAILS` as a comma-separated list.
+3. Set `SESSION_SECRET` to a long random value.
+4. Set `SESSION_HTTPS_ONLY=true` in production behind HTTPS.
+
+Only the review routes require login. The landing page and `/digest/*` stay public.
