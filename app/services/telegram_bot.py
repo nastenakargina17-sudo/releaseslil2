@@ -40,6 +40,7 @@ class TelegramBotService:
             return
 
         if data == "list_releases":
+            self.notifier.answer_callback_query(callback_query_id)
             releases = self.confluence.list_releases()
             keyboard_entries = [(entry.release_id, entry.release_date) for entry in releases]
             self.notifier.send_message(
@@ -47,11 +48,14 @@ class TelegramBotService:
                 chat_id=chat_id,
                 reply_markup=build_release_list_keyboard(keyboard_entries),
             )
-            self.notifier.answer_callback_query(callback_query_id)
             return
 
         if data.startswith("release:"):
             release_id = data.split(":", 1)[1]
+            self.notifier.answer_callback_query(
+                callback_query_id,
+                text=f"Импортирую релиз {release_id}…",
+            )
             import_release_from_apis(release_id)
             release = get_release(release_id)
             items = list_items(release_id)
@@ -65,8 +69,4 @@ class TelegramBotService:
             self.notifier.send_message(
                 build_release_review_message(release_id, release_date, review_url),
                 chat_id=chat_id,
-            )
-            self.notifier.answer_callback_query(
-                callback_query_id,
-                text=f"Релиз {release_id} импортирован ({len(items)} пунктов)",
             )

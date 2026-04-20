@@ -1,11 +1,11 @@
 from pathlib import Path
 from uuid import uuid4
 
-from collections import defaultdict
+from collections import defaultdict, deque
 from typing import Optional
 from urllib.parse import urlencode
 
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -62,6 +62,9 @@ auth_settings = get_auth_settings()
 ensure_directories()
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 app.mount("/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
+app.state.processed_telegram_update_ids = set()
+app.state.processed_telegram_update_order = deque()
+app.state.processed_telegram_update_limit = 1000
 
 
 @app.on_event("startup")
@@ -189,14 +192,59 @@ def import_release(release_id: str = Form(...)) -> RedirectResponse:
 
 
 @app.post("/telegram/webhook")
-async def telegram_webhook(request: Request) -> JSONResponse:
+async def telegram_webhook(request: Request, background_tasks: BackgroundTasks) -> JSONResponse:
     payload = await request.json()
-    bot = TelegramBotService()
-    if "message" in payload:
-        bot.handle_message(payload["message"])
-    elif "callback_query" in payload:
-        bot.handle_callback_query(payload["callback_query"])
+    update_id = payload.get("update_id")
+    if isinstance(update_id, int) and _telegram_update_seen(request.app, update_id):
+        return JSONResponse({"ok": True, "duplicate": True})
+
+    background_tasks.add_task(_process_telegram_update, payload)
     return JSONResponse({"ok": True})
+
+
+def _process_telegram_update(payload: dict) -> None:
+    bot = TelegramBotService()
+    try:
+        if "message" in payload:
+            bot.handle_message(payload["message"])
+        elif "callback_query" in payload:
+            bot.handle_callback_query(payload["callback_query"])
+    except Exception as exc:
+        chat_id = _extract_telegram_chat_id(payload)
+        if chat_id:
+            try:
+                bot.notifier.send_message(
+                    f"Не удалось обработать Telegram-событие: {exc}",
+                    chat_id=chat_id,
+                )
+            except Exception:
+                pass
+
+
+def _extract_telegram_chat_id(payload: dict) -> Optional[str]:
+    message = payload.get("message") or {}
+    callback_query = payload.get("callback_query") or {}
+    callback_message = callback_query.get("message") or {}
+    for candidate in (message, callback_message):
+        chat_id = str((candidate.get("chat") or {}).get("id") or "").strip()
+        if chat_id:
+            return chat_id
+    return None
+
+
+def _telegram_update_seen(app: FastAPI, update_id: int) -> bool:
+    processed_ids = app.state.processed_telegram_update_ids
+    processed_order = app.state.processed_telegram_update_order
+    if update_id in processed_ids:
+        return True
+
+    processed_ids.add(update_id)
+    processed_order.append(update_id)
+    limit = app.state.processed_telegram_update_limit
+    while len(processed_order) > limit:
+        oldest = processed_order.popleft()
+        processed_ids.discard(oldest)
+    return False
 
 
 @app.get("/review/{release_id}", response_class=HTMLResponse)
