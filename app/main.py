@@ -5,7 +5,7 @@ from collections import defaultdict
 from typing import Optional
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -27,6 +27,7 @@ from app.notifications.telegram import (
 from app.services.ingest import build_release
 from app.services.importers import import_release_from_apis
 from app.services.mock_data import sample_source_items
+from app.services.telegram_bot import TelegramBotService
 from app.storage import (
     add_item_image,
     get_release,
@@ -86,6 +87,17 @@ def import_release(release_id: str = Form(...)) -> RedirectResponse:
     except Exception as exc:
         return RedirectResponse(url=f"/?error={str(exc)}", status_code=303)
     return RedirectResponse(url=f"/review/{release_id}", status_code=303)
+
+
+@app.post("/telegram/webhook")
+async def telegram_webhook(request: Request) -> JSONResponse:
+    payload = await request.json()
+    bot = TelegramBotService()
+    if "message" in payload:
+        bot.handle_message(payload["message"])
+    elif "callback_query" in payload:
+        bot.handle_callback_query(payload["callback_query"])
+    return JSONResponse({"ok": True})
 
 
 @app.get("/review/{release_id}", response_class=HTMLResponse)

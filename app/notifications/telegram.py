@@ -1,5 +1,5 @@
 import httpx
-from typing import Optional
+from typing import Any, Optional
 
 from app.config import TelegramSettings
 from app.models import DigestItem, DigestRelease, ItemStatus, ItemType, SummaryStatus
@@ -13,15 +13,43 @@ class TelegramNotifier:
     def __init__(self, settings: TelegramSettings) -> None:
         self.settings = settings
 
-    def send_message(self, text: str) -> None:
-        if not self.settings.bot_token or not self.settings.chat_id:
+    def send_message(
+        self,
+        text: str,
+        chat_id: Optional[str] = None,
+        reply_markup: Optional[dict[str, Any]] = None,
+    ) -> None:
+        target_chat_id = chat_id or self.settings.chat_id
+        if not self.settings.bot_token or not target_chat_id:
             raise TelegramNotificationError("Telegram settings are not configured")
         url = f"https://api.telegram.org/bot{self.settings.bot_token}/sendMessage"
         payload = {
-            "chat_id": self.settings.chat_id,
+            "chat_id": target_chat_id,
             "text": text,
             "disable_web_page_preview": True,
         }
+        if reply_markup:
+            payload["reply_markup"] = reply_markup
+        with httpx.Client(timeout=30.0) as client:
+            response = client.post(url, json=payload)
+            response.raise_for_status()
+
+    def answer_callback_query(self, callback_query_id: str, text: Optional[str] = None) -> None:
+        if not self.settings.bot_token:
+            raise TelegramNotificationError("Telegram settings are not configured")
+        url = f"https://api.telegram.org/bot{self.settings.bot_token}/answerCallbackQuery"
+        payload: dict[str, Any] = {"callback_query_id": callback_query_id}
+        if text:
+            payload["text"] = text
+        with httpx.Client(timeout=30.0) as client:
+            response = client.post(url, json=payload)
+            response.raise_for_status()
+
+    def set_webhook(self, webhook_url: str) -> None:
+        if not self.settings.bot_token:
+            raise TelegramNotificationError("Telegram settings are not configured")
+        url = f"https://api.telegram.org/bot{self.settings.bot_token}/setWebhook"
+        payload = {"url": webhook_url}
         with httpx.Client(timeout=30.0) as client:
             response = client.post(url, json=payload)
             response.raise_for_status()
@@ -33,6 +61,42 @@ def build_release_import_message(release_id: str, release_date: str, item_count:
         f"Плановая дата релиза: {release_date}\n"
         f"Подготовлено пунктов для ревью: {item_count}"
     )
+
+
+def build_bot_welcome_message() -> str:
+    return (
+        "Привет! Я помогу с релиз-дайджестами.\n\n"
+        "Нажмите кнопку ниже, чтобы показать список релизов."
+    )
+
+
+def build_release_list_message() -> str:
+    return "Выберите релиз из списка:"
+
+
+def build_release_review_message(release_id: str, release_date: str, review_url: str) -> str:
+    return (
+        f"Релиз {release_id} готов к ревью.\n"
+        f"Плановая дата релиза: {release_date}\n"
+        f"Открыть страницу ревью: {review_url}"
+    )
+
+
+def build_release_list_keyboard(entries: list[tuple[str, str]]) -> dict[str, Any]:
+    return {
+        "inline_keyboard": [
+            [{"text": release_date, "callback_data": f"release:{release_id}"}]
+            for release_id, release_date in entries
+        ]
+    }
+
+
+def build_start_keyboard() -> dict[str, Any]:
+    return {
+        "inline_keyboard": [
+            [{"text": "Показать список релизов", "callback_data": "list_releases"}]
+        ]
+    }
 
 
 def build_review_status_message(

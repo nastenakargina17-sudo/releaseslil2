@@ -2,12 +2,19 @@ import json
 import ssl
 import urllib.request
 from html.parser import HTMLParser
+from dataclasses import dataclass
 
 from app.config import ConfluenceSettings
 
 
 class ConfluenceAPIError(RuntimeError):
     pass
+
+
+@dataclass(frozen=True)
+class ReleaseScheduleEntry:
+    release_id: str
+    release_date: str
 
 
 class ConfluenceAPIClient:
@@ -28,6 +35,17 @@ class ConfluenceAPIClient:
         if not release_date:
             raise ConfluenceAPIError(f"Could not find release date for {release_id} in Confluence schedule")
         return release_date
+
+    def list_releases(self) -> list[ReleaseScheduleEntry]:
+        self._validate_settings()
+        page_id = self.settings.release_schedule_page_id
+        url = f"{self.settings.api_base_url}/content/{page_id}?expand=body.storage,version"
+        request = urllib.request.Request(url, headers=self._headers())
+        with urllib.request.urlopen(request, context=self._ssl_context, timeout=60) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+
+        html = (((payload.get("body") or {}).get("storage") or {}).get("value") or "")
+        return _list_releases_from_schedule(html)
 
     def _validate_settings(self) -> None:
         if not self.settings.api_base_url:
@@ -82,8 +100,16 @@ class _TableParser(HTMLParser):
 
 
 def _find_release_date_in_schedule(html: str, release_id: str) -> str:
+    for entry in _list_releases_from_schedule(html):
+        if entry.release_id == release_id:
+            return entry.release_date
+    raise ConfluenceAPIError(f"Release {release_id} not found in Confluence schedule table")
+
+
+def _list_releases_from_schedule(html: str) -> list[ReleaseScheduleEntry]:
     parser = _TableParser()
     parser.feed(html)
+    entries: list[ReleaseScheduleEntry] = []
     for table in parser.tables:
         if not table:
             continue
@@ -96,7 +122,18 @@ def _find_release_date_in_schedule(html: str, release_id: str) -> str:
         for row in table[1:]:
             if len(row) <= max(release_date_index, release_link_index):
                 continue
+            release_date = row[release_date_index]
             release_link = row[release_link_index]
-            if release_id in release_link:
-                return row[release_date_index]
-    raise ConfluenceAPIError(f"Release {release_id} not found in Confluence schedule table")
+            release_id = _extract_release_id(release_link)
+            if release_id and release_date:
+                entries.append(ReleaseScheduleEntry(release_id=release_id, release_date=release_date))
+    return entries
+
+
+def _extract_release_id(release_link: str) -> str:
+    if not release_link:
+        return ""
+    text = release_link.strip().rstrip("/")
+    if "/" in text:
+        return text.split("/")[-1]
+    return text
