@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Digest {{ release.id }}</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 980px; margin: 40px auto; padding: 0 16px; }
+    .item { border-bottom: 1px solid #eee; padding: 14px 0; }
+    .meta { color: #666; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <h1>Monthly Digest</h1>
+  <p>Дата релиза: <strong>{{ release.release_date }}</strong></p>
+
+  <h2>Summary</h2>
+  <p>{{ release.summary }}</p>
+
+  <h2>Что нового</h2>
+  {% for item in new_features %}
+    <div class="item">
+      <h3>{{ item.title }}</h3>
+      <div class="meta">Модуль: {{ item.module }} | Категория: {{ item.category.value if item.category else "-" }}</div>
+      <p>{{ item.description }}</p>
+      {% if item.image_paths %}
+        {% for image_path in item.image_paths %}
+          <p><img src="{{ image_path }}" alt="Digest image" style="max-width: 100%; border-radius: 8px; border: 1px solid #ddd;"></p>
+        {% endfor %}
+      {% endif %}
+    </div>
+  {% else %}
+    <p>Нет новых фич.</p>
+  {% endfor %}
+
+  <h2>Что стало удобнее</h2>
+  {% for item in changes %}
+    <div class="item">
+      <h3>{{ item.title }}</h3>
+      <div class="meta">Модуль: {{ item.module }} | Категория: {{ item.category.value if item.category else "-" }}</div>
+      <p>{{ item.description }}</p>
+      {% if item.image_paths %}
+        {% for image_path in item.image_paths %}
+          <p><img src="{{ image_path }}" alt="Digest image" style="max-width: 100%; border-radius: 8px; border: 1px solid #ddd;"></p>
+        {% endfor %}
+      {% endif %}
+    </div>
+  {% else %}
+    <p>Нет изменений.</p>
+  {% endfor %}
+
+  <h2>Исправления по модулям</h2>
+  {% for module, items in grouped_bugfixes.items() %}
+    <h3>{{ module }}</h3>
+    <ul>
+      {% for item in items %}
+        <li><a href="{{ item.tracker_urls[0] }}">{{ item.title }}</a></li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p>Нет исправлений.</p>
+  {% endfor %}
+
+  <h2>Технические доработки</h2>
+  {% for module, items in grouped_technical.items() %}
+    <h3>{{ module }}</h3>
+    <ul>
+      {% for item in items %}
+        <li><a href="{{ item.tracker_urls[0] }}">{{ item.title }}</a></li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p>Нет технических доработок.</p>
+  {% endfor %}
+</body>
+</html>

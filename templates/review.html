@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Review {{ release.id }}</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 1100px; margin: 32px auto; padding: 0 16px; }
+    .card { border: 1px solid #ddd; border-radius: 8px; padding: 16px; margin: 16px 0; }
+    .grid { display: grid; gap: 10px; }
+    .meta { color: #666; font-size: 14px; margin-bottom: 8px; }
+    input[type="text"], textarea, select { width: 100%; padding: 8px; box-sizing: border-box; }
+    textarea { min-height: 96px; }
+    .inline { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  </style>
+</head>
+<body>
+  <h1>Review: {{ release.id }}</h1>
+  <p>Дата релиза: <strong>{{ release.release_date }}</strong></p>
+  {% if flash == "review_notified" %}
+    <p style="color: green;">Сообщение о статусе ревью отправлено в Telegram.</p>
+  {% elif flash == "digest_notified" %}
+    <p style="color: green;">Сообщение о готовом digest отправлено в Telegram.</p>
+  {% elif flash == "image_uploaded" %}
+    <p style="color: green;">Изображение добавлено к пункту дайджеста.</p>
+  {% elif flash == "digest_not_ready" %}
+    <p style="color: #b00020;">Digest еще не готов: summary и все пункты должны иметь финальный статус.</p>
+  {% endif %}
+
+  <div class="card">
+    <h2>Telegram</h2>
+    <div class="inline">
+      <form method="post" action="/review/{{ release.id }}/notify-review">
+        <button type="submit">Отправить статус ревью в Telegram</button>
+      </form>
+      <form method="post" action="/review/{{ release.id }}/notify-digest">
+        <button type="submit" {% if not digest_ready %}disabled{% endif %}>Отправить готовый digest в Telegram</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Summary</h2>
+    <form method="post" action="/review/{{ release.id }}/summary" class="grid">
+      <textarea name="summary">{{ release.summary }}</textarea>
+      <div>
+        <label for="summary_status">Статус</label>
+        <select name="summary_status" id="summary_status">
+          {% for status in summary_statuses %}
+            <option value="{{ status.value }}" {% if release.summary_status == status %}selected{% endif %}>{{ status.value }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div><button type="submit">Сохранить summary</button></div>
+    </form>
+  </div>
+
+  {% for item in items %}
+    <div class="card">
+      <div class="meta">
+        Тип: {{ item.type.value }} | Модуль: {{ item.module }} | Grouping: {{ item.grouping_mode.value }}
+      </div>
+      <form method="post" action="/review/{{ release.id }}/items/{{ item.id }}" class="grid">
+        <div>
+          <label>Заголовок</label>
+          <input type="text" name="title" value="{{ item.title }}">
+        </div>
+        <div>
+          <label>Описание</label>
+          <textarea name="description">{{ item.description }}</textarea>
+        </div>
+        <div>
+          <label>Категория</label>
+          <select name="category">
+            <option value="">--</option>
+            {% for category in categories %}
+              <option value="{{ category.value }}" {% if item.category == category %}selected{% endif %}>{{ category.value }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label>Статус</label>
+          <select name="status">
+            {% for status in statuses %}
+              <option value="{{ status.value }}" {% if item.status == status %}selected{% endif %}>{{ status.value }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <label class="inline">
+          <input type="checkbox" name="is_paid_feature" {% if item.is_paid_feature %}checked{% endif %}>
+          Платная фича
+        </label>
+        <div class="meta">
+          Источники:
+          {% for url in item.tracker_urls %}
+            <a href="{{ url }}">{{ url }}</a>{% if not loop.last %}, {% endif %}
+          {% endfor %}
+        </div>
+        <div><button type="submit">Сохранить пункт</button></div>
+      </form>
+      <form method="post" action="/review/{{ release.id }}/items/{{ item.id }}/image" enctype="multipart/form-data" class="grid" style="margin-top: 12px;">
+        <div>
+          <label>Добавить изображение</label>
+          <input type="file" name="image" accept="image/*">
+        </div>
+        <div><button type="submit">Загрузить изображение</button></div>
+      </form>
+      {% if item.image_paths %}
+        <div class="inline" style="margin-top: 12px;">
+          {% for image_path in item.image_paths %}
+            <a href="{{ image_path }}" target="_blank">
+              <img src="{{ image_path }}" alt="Digest image" style="max-width: 220px; max-height: 140px; border: 1px solid #ddd; border-radius: 6px;">
+            </a>
+          {% endfor %}
+        </div>
+      {% endif %}
+    </div>
+  {% endfor %}
+
+  <p><a href="/digest/{{ release.id }}">Открыть чистовой digest</a></p>
+</body>
+</html>

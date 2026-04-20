@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: release-digest-mvp
+    env: python
+    plan: starter
+    buildCommand: |
+      python -m venv .venv
+      .venv/bin/pip install -r requirements.txt
+    startCommand: .venv/bin/uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: TRACKER_API_BASE_URL
+        sync: false
+      - key: TRACKER_API_TOKEN
+        sync: false
+      - key: TRACKER_ORG_ID
+        sync: false
+      - key: CONFLUENCE_API_BASE_URL
+        sync: false
+      - key: CONFLUENCE_API_TOKEN
+        sync: false
+      - key: CONFLUENCE_RELEASE_SCHEDULE_PAGE_ID
+        sync: false
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_CHAT_ID
+        sync: false
+      - key: APP_BASE_URL
+        sync: false
