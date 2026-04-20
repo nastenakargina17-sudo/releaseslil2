@@ -2,128 +2,855 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <title>Review {{ release.id }}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ревью {{ release.id }}</title>
   <style>
-    body { font-family: Arial, sans-serif; max-width: 1100px; margin: 32px auto; padding: 0 16px; }
-    .card { border: 1px solid #ddd; border-radius: 8px; padding: 16px; margin: 16px 0; }
-    .grid { display: grid; gap: 10px; }
-    .meta { color: #666; font-size: 14px; margin-bottom: 8px; }
-    input[type="text"], textarea, select { width: 100%; padding: 8px; box-sizing: border-box; }
-    textarea { min-height: 96px; }
-    .inline { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+    :root {
+      --bg: #eef2fb;
+      --surface: #ffffff;
+      --surface-soft: #efefef;
+      --surface-muted: #e6eaf8;
+      --line: #c9d0e5;
+      --line-strong: #7a85a7;
+      --text: #09081e;
+      --text-soft: #394165;
+      --navy: #0c0b23;
+      --navy-deep: #0e142e;
+      --navy-bright: #1a234a;
+      --brand: #ffc804;
+      --brand-soft: #fff1b5;
+      --success: #49de4e;
+      --success-strong: #4df256;
+      --success-soft: #d9ffdb;
+      --danger: #c12b38;
+      --danger-soft: #ffe4e6;
+      --shadow: 0 18px 45px rgba(12, 11, 35, 0.12);
+      --radius-xl: 24px;
+      --radius-lg: 18px;
+      --radius-md: 14px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(255, 200, 4, 0.18), transparent 28%),
+        linear-gradient(180deg, #f8faff 0%, var(--bg) 55%, #f5f7fc 100%);
+    }
+
+    a { color: var(--navy-bright); }
+
+    .page {
+      width: min(1180px, calc(100% - 32px));
+      margin: 28px auto 56px;
+    }
+
+    .hero,
+    .action-bar,
+    .flash,
+    .summary-card,
+    .item-card {
+      border: 1px solid rgba(122, 133, 167, 0.22);
+      border-radius: var(--radius-xl);
+      background: rgba(255, 255, 255, 0.94);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(12px);
+    }
+
+    .hero {
+      position: relative;
+      overflow: hidden;
+      padding: 28px;
+      background:
+        linear-gradient(135deg, rgba(255, 200, 4, 0.16), rgba(255, 255, 255, 0.96) 40%),
+        linear-gradient(135deg, rgba(14, 20, 46, 0.98), rgba(26, 35, 74, 0.95));
+      color: #fff;
+    }
+
+    .hero::after {
+      content: "";
+      position: absolute;
+      inset: auto -120px -120px auto;
+      width: 300px;
+      height: 300px;
+      border-radius: 999px;
+      background: radial-gradient(circle, rgba(255, 200, 4, 0.36), rgba(255, 200, 4, 0));
+      pointer-events: none;
+    }
+
+    .hero-top,
+    .hero-meta,
+    .action-row,
+    .item-toolbar,
+    .field-row,
+    .source-links,
+    .image-gallery,
+    .upload-row {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .hero-top { justify-content: space-between; }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.12);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      padding: 8px 12px;
+      color: rgba(255, 255, 255, 0.86);
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    h1, h2, h3, p { margin: 0; }
+
+    .hero h1 {
+      margin-top: 16px;
+      font-size: clamp(32px, 5vw, 46px);
+      line-height: 1.03;
+      max-width: 760px;
+    }
+
+    .hero-subtitle {
+      margin-top: 14px;
+      max-width: 720px;
+      color: rgba(255, 255, 255, 0.8);
+      font-size: 16px;
+      line-height: 1.55;
+    }
+
+    .hero-meta {
+      margin-top: 18px;
+    }
+
+    .hero-chip {
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.1);
+      color: rgba(255, 255, 255, 0.94);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+    }
+
+    .action-bar {
+      position: sticky;
+      top: 14px;
+      z-index: 20;
+      margin-top: 18px;
+      padding: 18px 20px;
+      background:
+        linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(239, 239, 239, 0.92));
+    }
+
+    .action-row { justify-content: space-between; }
+
+    .action-copy {
+      display: grid;
+      gap: 6px;
+    }
+
+    .action-copy small {
+      color: var(--text-soft);
+      font-size: 13px;
+    }
+
+    .action-buttons {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .flash,
+    .error-banner {
+      margin-top: 16px;
+      padding: 14px 18px;
+      font-size: 15px;
+      line-height: 1.45;
+    }
+
+    .flash.success {
+      background: linear-gradient(135deg, rgba(217, 255, 219, 0.95), rgba(255, 255, 255, 0.95));
+      border-color: rgba(73, 222, 78, 0.28);
+    }
+
+    .flash.error,
+    .error-banner {
+      background: linear-gradient(135deg, rgba(255, 228, 230, 0.94), rgba(255, 255, 255, 0.95));
+      border-color: rgba(193, 43, 56, 0.18);
+      color: #7d1621;
+    }
+
+    .error-banner[hidden] { display: none; }
+
+    .layout {
+      display: grid;
+      gap: 18px;
+      margin-top: 18px;
+    }
+
+    .summary-card,
+    .item-card {
+      padding: 24px;
+    }
+
+    .summary-card.is-blocked,
+    .item-card.is-blocked {
+      border-color: rgba(193, 43, 56, 0.36);
+      box-shadow: 0 18px 45px rgba(193, 43, 56, 0.1);
+    }
+
+    .item-card.is-excluded {
+      background:
+        linear-gradient(135deg, rgba(255, 200, 4, 0.16), rgba(255, 255, 255, 0.96)),
+        var(--surface);
+      border-color: rgba(255, 200, 4, 0.42);
+    }
+
+    .item-card.is-dirty,
+    .summary-card.is-dirty {
+      border-color: rgba(255, 200, 4, 0.65);
+      box-shadow: 0 20px 48px rgba(255, 200, 4, 0.18);
+    }
+
+    .section-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      align-items: flex-start;
+      margin-bottom: 18px;
+      flex-wrap: wrap;
+    }
+
+    .section-copy {
+      display: grid;
+      gap: 8px;
+    }
+
+    .section-copy h2 {
+      font-size: 24px;
+      line-height: 1.15;
+    }
+
+    .section-copy p {
+      color: var(--text-soft);
+      line-height: 1.55;
+      max-width: 760px;
+    }
+
+    .item-pill,
+    .status-pill,
+    .mini-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: var(--surface-muted);
+      color: var(--navy-bright);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .status-pill.status-approved {
+      background: var(--success-soft);
+      color: #146b1d;
+    }
+
+    .status-pill.status-reviewed {
+      background: rgba(255, 200, 4, 0.18);
+      color: #6f5800;
+    }
+
+    .status-pill.status-draft {
+      background: rgba(201, 208, 229, 0.62);
+      color: var(--navy-bright);
+    }
+
+    .status-pill.status-excluded {
+      background: rgba(255, 200, 4, 0.22);
+      color: #6d5100;
+    }
+
+    .meta-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+
+    form.grid {
+      display: grid;
+      gap: 16px;
+    }
+
+    .field-group {
+      display: grid;
+      gap: 8px;
+    }
+
+    .field-row {
+      align-items: stretch;
+    }
+
+    .field-row > .field-group {
+      flex: 1 1 220px;
+      min-width: 0;
+    }
+
+    label {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--navy-bright);
+    }
+
+    input[type="text"],
+    textarea,
+    select,
+    input[type="file"] {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      background: rgba(255, 255, 255, 0.92);
+      color: var(--text);
+      padding: 12px 14px;
+      font: inherit;
+      transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+    }
+
+    input[type="text"]:focus,
+    textarea:focus,
+    select:focus,
+    input[type="file"]:focus {
+      outline: none;
+      border-color: rgba(255, 200, 4, 0.9);
+      box-shadow: 0 0 0 4px rgba(255, 200, 4, 0.18);
+    }
+
+    textarea {
+      min-height: 128px;
+      resize: vertical;
+      line-height: 1.55;
+    }
+
+    .toggle-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .checkbox {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 14px;
+      border-radius: var(--radius-md);
+      border: 1px solid rgba(122, 133, 167, 0.24);
+      background: rgba(239, 239, 239, 0.46);
+      color: var(--text);
+      cursor: pointer;
+    }
+
+    .checkbox input {
+      width: 18px;
+      height: 18px;
+      accent-color: var(--brand);
+      margin: 0;
+    }
+
+    .checkbox.accent {
+      border-color: rgba(255, 200, 4, 0.35);
+      background: rgba(255, 200, 4, 0.12);
+    }
+
+    .button {
+      appearance: none;
+      border: none;
+      border-radius: 999px;
+      padding: 12px 18px;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+      text-decoration: none;
+      transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease, color 0.18s ease;
+    }
+
+    .button:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 14px 28px rgba(12, 11, 35, 0.14);
+    }
+
+    .button:disabled {
+      cursor: not-allowed;
+      opacity: 0.52;
+      box-shadow: none;
+      transform: none;
+    }
+
+    .button-primary {
+      background: linear-gradient(135deg, var(--brand), #ffe17a);
+      color: var(--navy);
+    }
+
+    .button-dark {
+      background: linear-gradient(135deg, var(--navy-bright), var(--navy-deep));
+      color: #fff;
+    }
+
+    .button-subtle {
+      background: rgba(201, 208, 229, 0.45);
+      color: var(--navy-bright);
+    }
+
+    .button-save {
+      background: linear-gradient(135deg, rgba(201, 208, 229, 0.62), rgba(239, 239, 239, 0.95));
+      color: var(--navy-bright);
+    }
+
+    .button-save.is-dirty {
+      background: linear-gradient(135deg, var(--success), var(--success-strong));
+      color: #0c2b0d;
+      box-shadow: 0 16px 32px rgba(77, 242, 86, 0.24);
+    }
+
+    .button-logout {
+      background: rgba(255, 255, 255, 0.12);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      color: #fff;
+    }
+
+    .source-links {
+      gap: 10px;
+      align-items: baseline;
+      color: var(--text-soft);
+      font-size: 14px;
+    }
+
+    .source-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 10px;
+      border-radius: 999px;
+      background: rgba(201, 208, 229, 0.34);
+      text-decoration: none;
+      font-weight: 700;
+    }
+
+    .image-gallery {
+      margin-top: 8px;
+      gap: 14px;
+    }
+
+    .image-gallery img {
+      width: 220px;
+      max-width: 100%;
+      height: 140px;
+      object-fit: cover;
+      border-radius: 14px;
+      border: 1px solid rgba(122, 133, 167, 0.22);
+      background: #fff;
+    }
+
+    .stack {
+      display: grid;
+      gap: 18px;
+    }
+
+    .helper-text {
+      color: var(--text-soft);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    @media (max-width: 760px) {
+      .page { width: min(100% - 20px, 1180px); margin-top: 12px; }
+      .hero,
+      .action-bar,
+      .summary-card,
+      .item-card { padding: 18px; border-radius: 20px; }
+      .hero-top,
+      .section-head,
+      .action-row { align-items: stretch; }
+      .action-row,
+      .hero-top { flex-direction: column; }
+      .action-buttons { width: 100%; }
+      .action-buttons > * { width: 100%; }
+      .button { width: 100%; justify-content: center; text-align: center; }
+    }
   </style>
 </head>
 <body>
-  <h1>Review: {{ release.id }}</h1>
-  <p>Дата релиза: <strong>{{ release.release_date }}</strong></p>
-  {% if review_user %}
-    <div class="inline" style="justify-content: space-between; margin-bottom: 16px;">
-      <p style="margin: 0;">Доступ подтверждён для <strong>{{ review_user.name }}</strong> ({{ review_user.email }})</p>
-      <form method="post" action="/auth/logout">
-        <button type="submit">Выйти</button>
-      </form>
-    </div>
-  {% endif %}
-  {% if flash == "review_notified" %}
-    <p style="color: green;">Сообщение о статусе ревью отправлено в Telegram.</p>
-  {% elif flash == "digest_notified" %}
-    <p style="color: green;">Сообщение о готовом digest отправлено в Telegram.</p>
-  {% elif flash == "image_uploaded" %}
-    <p style="color: green;">Изображение добавлено к пункту дайджеста.</p>
-  {% elif flash == "digest_not_ready" %}
-    <p style="color: #b00020;">Digest еще не готов: summary и все пункты должны иметь финальный статус.</p>
-  {% endif %}
+  <div class="page">
+    <section class="hero">
+      <div class="hero-top">
+        <div class="eyebrow">Review Workspace</div>
+        {% if review_user %}
+          <form method="post" action="/auth/logout">
+            <button type="submit" class="button button-logout">Выйти из ревью</button>
+          </form>
+        {% endif %}
+      </div>
 
-  <div class="card">
-    <h2>Telegram</h2>
-    <div class="inline">
-      <form method="post" action="/review/{{ release.id }}/notify-review">
-        <button type="submit">Отправить статус ревью в Telegram</button>
-      </form>
-      <form method="post" action="/review/{{ release.id }}/notify-digest">
-        <button type="submit" {% if not digest_ready %}disabled{% endif %}>Отправить готовый digest в Telegram</button>
-      </form>
+      <h1>Ревью релиза {{ release.id }}</h1>
+      <p class="hero-subtitle">
+        Подтверждаем формулировки, исключаем лишнее из публичного дайджеста и проверяем, что до финальной публикации дойдут только согласованные изменения.
+      </p>
+
+      <div class="hero-meta">
+        <span class="hero-chip">Дата релиза: <strong>{{ release.release_date }}</strong></span>
+        {% if review_user %}
+          <span class="hero-chip">Авторизован сотрудник: <strong>{{ review_user.name }}</strong> ({{ review_user.email }})</span>
+        {% endif %}
+        <span class="hero-chip">Пунктов в ревью: <strong>{{ items|length }}</strong></span>
+      </div>
+    </section>
+
+    <section class="action-bar">
+      <div class="action-row">
+        <div class="action-copy">
+          <strong>Финальный шаг по релизу</strong>
+          <small>Когда все пункты подтверждены или исключены, можно открывать чистовой дайджест.</small>
+        </div>
+        <div class="action-buttons">
+          <a
+            href="/digest/{{ release.id }}"
+            class="button button-primary"
+            id="confirm-digest-button"
+            data-release-id="{{ release.id }}"
+          >
+            Подтвердить дайджест
+          </a>
+          <form method="post" action="/review/{{ release.id }}/notify-review">
+            <button type="submit" class="button button-subtle">Отправить статус ревью в Telegram</button>
+          </form>
+          <form method="post" action="/review/{{ release.id }}/notify-digest">
+            <button type="submit" class="button button-dark" {% if not digest_ready %}disabled{% endif %}>Отправить готовый дайджест в Telegram</button>
+          </form>
+        </div>
+      </div>
+      <div class="error-banner" id="digest-error-banner" hidden></div>
+    </section>
+
+    {% if flash == "review_notified" %}
+      <div class="flash success">Сообщение о статусе ревью отправлено в Telegram.</div>
+    {% elif flash == "digest_notified" %}
+      <div class="flash success">Сообщение о готовом дайджесте отправлено в Telegram.</div>
+    {% elif flash == "image_uploaded" %}
+      <div class="flash success">Изображение добавлено к пункту дайджеста.</div>
+    {% elif flash == "digest_not_ready" %}
+      <div class="flash error">Дайджест пока нельзя отправить: сначала подтвердите summary и приведите все пункты в финальный статус.</div>
+    {% endif %}
+
+    <div class="layout">
+      <section class="summary-card" id="summary-card" data-summary-card data-summary-approved="{{ 'true' if release.summary_status.value == approved_summary_status else 'false' }}">
+        <div class="section-head">
+          <div class="section-copy">
+            <h2>Summary релиза</h2>
+            <p>Это вводный текст для чистового дайджеста. Здесь лучше оставить короткую бизнес-подводку, без технических деталей и лишних внутренних терминов.</p>
+          </div>
+          <span class="status-pill status-{{ release.summary_status.value }}">{{ status_labels[release.summary_status] }}</span>
+        </div>
+
+        <form method="post" action="/review/{{ release.id }}/summary" class="grid" data-review-form data-form-kind="summary">
+          <div class="field-group">
+            <label for="summary">Текст summary</label>
+            <textarea name="summary" id="summary">{{ release.summary }}</textarea>
+          </div>
+
+          <div class="field-row">
+            <div class="field-group">
+              <label for="summary_status">Статус summary</label>
+              <select name="summary_status" id="summary_status" data-summary-status-select>
+                {% for status in summary_statuses %}
+                  <option value="{{ status.value }}" {% if release.summary_status == status %}selected{% endif %}>{{ status_labels[status] }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <button type="submit" class="button button-save" data-save-button disabled>Сохранить изменения</button>
+          </div>
+        </form>
+      </section>
+
+      <div class="stack">
+        {% for item in items %}
+          {% set is_descriptionless = item.type.value in descriptionless_item_types %}
+          {% set is_excluded = item.status.value == excluded_status %}
+          <article
+            class="item-card{% if is_excluded %} is-excluded{% endif %}"
+            id="item-card-{{ item.id }}"
+            data-item-card
+            data-item-id="{{ item.id }}"
+            data-item-status="{{ item.status.value }}"
+            data-item-type="{{ item.type.value }}"
+          >
+            <div class="section-head">
+              <div class="section-copy">
+                <div class="meta-grid">
+                  <span class="item-pill">{{ item_type_labels[item.type] }}</span>
+                  <span class="mini-pill">Модуль: {{ item.module }}</span>
+                  {% if item.is_paid_feature %}
+                    <span class="mini-pill">Платная фича</span>
+                  {% endif %}
+                  {% if is_excluded %}
+                    <span class="mini-pill">Не попадёт в публичный дайджест</span>
+                  {% endif %}
+                </div>
+                <h2>{{ item.title }}</h2>
+                <p>
+                  {% if item.grouping_mode.value == "epic_group" %}
+                    Сгруппировано по эпику. Проверьте общий заголовок и итоговую бизнес-формулировку для публикации.
+                  {% elif is_descriptionless %}
+                    Для этого типа достаточно заголовка, статуса и решения, включаем ли пункт в релиз.
+                  {% else %}
+                    Здесь формируем итоговую формулировку для дайджеста: ясный заголовок, описание ценности и правильную категорию.
+                  {% endif %}
+                </p>
+              </div>
+              <span class="status-pill status-{{ item.status.value }}" data-status-pill>{{ status_labels[item.status] }}</span>
+            </div>
+
+            <form method="post" action="/review/{{ release.id }}/items/{{ item.id }}" class="grid" data-review-form data-item-form>
+              <div class="field-group">
+                <label for="title-{{ item.id }}">Заголовок</label>
+                <input type="text" name="title" id="title-{{ item.id }}" value="{{ item.title }}">
+                <div class="helper-text">Оставляем только бизнес-смысл без префиксов задачи, кодов и внутренней нумерации.</div>
+              </div>
+
+              {% if not is_descriptionless %}
+                <div class="field-group">
+                  <label for="description-{{ item.id }}">Описание</label>
+                  <textarea name="description" id="description-{{ item.id }}">{{ item.description }}</textarea>
+                </div>
+              {% endif %}
+
+              <div class="field-row">
+                <div class="field-group">
+                  <label for="category-{{ item.id }}">Категория ценности</label>
+                  <select name="category" id="category-{{ item.id }}">
+                    <option value="">Не выбрано</option>
+                    {% for category in categories %}
+                      <option value="{{ category.value }}" {% if item.category == category %}selected{% endif %}>{{ category_labels[category] }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+
+                <div class="field-group">
+                  <label for="status-{{ item.id }}">Статус ревью</label>
+                  <select name="status" id="status-{{ item.id }}" data-status-select>
+                    {% for status in editable_statuses %}
+                      <option value="{{ status.value }}" {% if item.status == status %}selected{% endif %}>{{ status_labels[status] }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+              </div>
+
+              <div class="toggle-row">
+                <label class="checkbox">
+                  <input type="checkbox" name="is_paid_feature" {% if item.is_paid_feature %}checked{% endif %}>
+                  Отметить как платную фичу
+                </label>
+                <label class="checkbox accent">
+                  <input type="checkbox" name="exclude_from_release" data-exclude-toggle {% if is_excluded %}checked{% endif %}>
+                  Исключить из релиза
+                </label>
+              </div>
+
+              <div class="source-links">
+                <strong>Источники:</strong>
+                {% for url in item.tracker_urls %}
+                  <a href="{{ url }}" class="source-link" target="_blank" rel="noreferrer">
+                    {{ item.source_item_ids[loop.index0] if loop.index0 < item.source_item_ids|length else ('Задача ' ~ loop.index) }}
+                  </a>
+                {% endfor %}
+              </div>
+
+              <div>
+                <button type="submit" class="button button-save" data-save-button disabled>Сохранить изменения</button>
+              </div>
+            </form>
+
+            <form method="post" action="/review/{{ release.id }}/items/{{ item.id }}/image" enctype="multipart/form-data" class="grid upload-row" style="margin-top: 18px;">
+              <div class="field-group" style="flex: 1 1 300px;">
+                <label for="image-{{ item.id }}">Добавить изображение</label>
+                <input type="file" name="image" id="image-{{ item.id }}" accept="image/*">
+              </div>
+              <div style="align-self: end;">
+                <button type="submit" class="button button-subtle">Загрузить изображение</button>
+              </div>
+            </form>
+
+            {% if item.image_paths %}
+              <div class="image-gallery">
+                {% for image_path in item.image_paths %}
+                  <a href="{{ image_path }}" target="_blank" rel="noreferrer">
+                    <img src="{{ image_path }}" alt="Digest image">
+                  </a>
+                {% endfor %}
+              </div>
+            {% endif %}
+          </article>
+        {% endfor %}
+      </div>
     </div>
   </div>
 
-  <div class="card">
-    <h2>Summary</h2>
-    <form method="post" action="/review/{{ release.id }}/summary" class="grid">
-      <textarea name="summary">{{ release.summary }}</textarea>
-      <div>
-        <label for="summary_status">Статус</label>
-        <select name="summary_status" id="summary_status">
-          {% for status in summary_statuses %}
-            <option value="{{ status.value }}" {% if release.summary_status == status %}selected{% endif %}>{{ status.value }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div><button type="submit">Сохранить summary</button></div>
-    </form>
-  </div>
+  <script>
+    (() => {
+      const digestErrorBanner = document.getElementById("digest-error-banner");
+      const confirmDigestButton = document.getElementById("confirm-digest-button");
+      const summaryCard = document.querySelector("[data-summary-card]");
 
-  {% for item in items %}
-    <div class="card">
-      <div class="meta">
-        Тип: {{ item.type.value }} | Модуль: {{ item.module }} | Grouping: {{ item.grouping_mode.value }}
-      </div>
-      <form method="post" action="/review/{{ release.id }}/items/{{ item.id }}" class="grid">
-        <div>
-          <label>Заголовок</label>
-          <input type="text" name="title" value="{{ item.title }}">
-        </div>
-        <div>
-          <label>Описание</label>
-          <textarea name="description">{{ item.description }}</textarea>
-        </div>
-        <div>
-          <label>Категория</label>
-          <select name="category">
-            <option value="">--</option>
-            {% for category in categories %}
-              <option value="{{ category.value }}" {% if item.category == category %}selected{% endif %}>{{ category.value }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div>
-          <label>Статус</label>
-          <select name="status">
-            {% for status in statuses %}
-              <option value="{{ status.value }}" {% if item.status == status %}selected{% endif %}>{{ status.value }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <label class="inline">
-          <input type="checkbox" name="is_paid_feature" {% if item.is_paid_feature %}checked{% endif %}>
-          Платная фича
-        </label>
-        <div class="meta">
-          Источники:
-          {% for url in item.tracker_urls %}
-            <a href="{{ url }}">{{ url }}</a>{% if not loop.last %}, {% endif %}
-          {% endfor %}
-        </div>
-        <div><button type="submit">Сохранить пункт</button></div>
-      </form>
-      <form method="post" action="/review/{{ release.id }}/items/{{ item.id }}/image" enctype="multipart/form-data" class="grid" style="margin-top: 12px;">
-        <div>
-          <label>Добавить изображение</label>
-          <input type="file" name="image" accept="image/*">
-        </div>
-        <div><button type="submit">Загрузить изображение</button></div>
-      </form>
-      {% if item.image_paths %}
-        <div class="inline" style="margin-top: 12px;">
-          {% for image_path in item.image_paths %}
-            <a href="{{ image_path }}" target="_blank">
-              <img src="{{ image_path }}" alt="Digest image" style="max-width: 220px; max-height: 140px; border: 1px solid #ddd; border-radius: 6px;">
-            </a>
-          {% endfor %}
-        </div>
-      {% endif %}
-    </div>
-  {% endfor %}
+      const getCardStatus = (card) => card?.dataset.itemStatus || "";
 
-  <p><a href="/digest/{{ release.id }}">Открыть чистовой digest</a></p>
+      const updateExcludedState = (form) => {
+        const card = form.closest("[data-item-card]");
+        const statusSelect = form.querySelector("[data-status-select]");
+        const excludeToggle = form.querySelector("[data-exclude-toggle]");
+        const statusPill = card?.querySelector("[data-status-pill]");
+        if (!card || !statusSelect || !excludeToggle || !statusPill) {
+          return;
+        }
+
+        if (excludeToggle.checked) {
+          statusSelect.dataset.previousValue = statusSelect.value;
+          statusSelect.disabled = true;
+          card.dataset.itemStatus = "{{ excluded_status }}";
+          card.classList.add("is-excluded");
+          statusPill.textContent = "Исключено";
+          statusPill.className = "status-pill status-{{ excluded_status }}";
+        } else {
+          if (statusSelect.disabled) {
+            statusSelect.disabled = false;
+            statusSelect.value = statusSelect.dataset.previousValue || statusSelect.value || "{{ approved_status }}";
+          }
+          card.dataset.itemStatus = statusSelect.value;
+          card.classList.remove("is-excluded");
+          const selectedLabel = statusSelect.options[statusSelect.selectedIndex]?.textContent || "";
+          statusPill.textContent = selectedLabel;
+          statusPill.className = `status-pill status-${statusSelect.value}`;
+        }
+      };
+
+      const updateCardStatus = (form) => {
+        const card = form.closest("[data-item-card]");
+        const statusSelect = form.querySelector("[data-status-select]");
+        const excludeToggle = form.querySelector("[data-exclude-toggle]");
+        const statusPill = card?.querySelector("[data-status-pill]");
+        if (!card || !statusSelect || !statusPill) {
+          return;
+        }
+        if (excludeToggle?.checked) {
+          updateExcludedState(form);
+          return;
+        }
+        card.dataset.itemStatus = statusSelect.value;
+        statusPill.textContent = statusSelect.options[statusSelect.selectedIndex]?.textContent || "";
+        statusPill.className = `status-pill status-${statusSelect.value}`;
+      };
+
+      const updateSummaryStatus = (form) => {
+        const select = form.querySelector("[data-summary-status-select]");
+        const pill = summaryCard?.querySelector(".status-pill");
+        if (!select || !pill || !summaryCard) {
+          return;
+        }
+        summaryCard.dataset.summaryApproved = String(select.value === "{{ approved_summary_status }}");
+        pill.textContent = select.options[select.selectedIndex]?.textContent || "";
+        pill.className = `status-pill status-${select.value}`;
+      };
+
+      const markDirtyState = (form) => {
+        const card = form.closest("[data-item-card], [data-summary-card]");
+        const saveButton = form.querySelector("[data-save-button]");
+        if (!saveButton || !card) {
+          return;
+        }
+
+        const isDirty = Array.from(form.elements).some((element) => {
+          if (!element.name || element.type === "file") {
+            return false;
+          }
+          if (element.type === "checkbox" || element.type === "radio") {
+            return element.checked !== element.defaultChecked;
+          }
+          return element.value !== element.defaultValue;
+        });
+
+        saveButton.disabled = !isDirty;
+        saveButton.classList.toggle("is-dirty", isDirty);
+        card.classList.toggle("is-dirty", isDirty);
+      };
+
+      document.querySelectorAll("[data-review-form]").forEach((form) => {
+        form.addEventListener("input", () => {
+          updateCardStatus(form);
+          updateSummaryStatus(form);
+          markDirtyState(form);
+        });
+
+        form.addEventListener("change", () => {
+          updateExcludedState(form);
+          updateCardStatus(form);
+          updateSummaryStatus(form);
+          markDirtyState(form);
+        });
+
+        updateExcludedState(form);
+        updateCardStatus(form);
+        updateSummaryStatus(form);
+        markDirtyState(form);
+      });
+
+      const clearHighlights = () => {
+        document.querySelectorAll(".is-blocked").forEach((element) => element.classList.remove("is-blocked"));
+      };
+
+      if (confirmDigestButton) {
+        confirmDigestButton.addEventListener("click", (event) => {
+          clearHighlights();
+          const blockedCards = Array.from(document.querySelectorAll("[data-item-card]")).filter((card) => {
+            const status = getCardStatus(card);
+            return status !== "{{ approved_status }}" && status !== "{{ excluded_status }}";
+          });
+
+          const summaryApproved = summaryCard?.dataset.summaryApproved === "true";
+
+          if (blockedCards.length > 0) {
+            event.preventDefault();
+            blockedCards.forEach((card) => card.classList.add("is-blocked"));
+            digestErrorBanner.textContent = "Не все задачи находятся в статусе подтверждения. Для генерации дайджеста все задачи должны быть подтверждены.";
+            digestErrorBanner.hidden = false;
+            blockedCards[0].scrollIntoView({ behavior: "smooth", block: "center" });
+            return;
+          }
+
+          if (!summaryApproved) {
+            event.preventDefault();
+            if (summaryCard) {
+              summaryCard.classList.add("is-blocked");
+              summaryCard.scrollIntoView({ behavior: "smooth", block: "center" });
+            }
+            digestErrorBanner.textContent = "Сначала подтвердите summary релиза.";
+            digestErrorBanner.hidden = false;
+            return;
+          }
+
+          digestErrorBanner.hidden = true;
+        });
+      }
+    })();
+  </script>
 </body>
 </html>

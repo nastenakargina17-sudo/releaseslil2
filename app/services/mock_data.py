@@ -5,7 +5,7 @@ def sample_source_items() -> list[SourceItem]:
     return [
         SourceItem(
             id="REL-101",
-            url="https://tracker.example.com/REL-101",
+            url="https://tracker.yandex.ru/REL-101",
             title="Новый сценарий согласования релиза",
             description="Добавить пользовательский сценарий согласования релиза",
             module="Релизы",
@@ -15,7 +15,7 @@ def sample_source_items() -> list[SourceItem]:
         ),
         SourceItem(
             id="REL-102",
-            url="https://tracker.example.com/REL-102",
+            url="https://tracker.yandex.ru/REL-102",
             title="Обновить отображение статусов согласования",
             description="Сделать статусы релиза более понятными",
             module="Релизы",
@@ -25,7 +25,7 @@ def sample_source_items() -> list[SourceItem]:
         ),
         SourceItem(
             id="SUP-201",
-            url="https://tracker.example.com/SUP-201",
+            url="https://tracker.yandex.ru/SUP-201",
             title="Исправить ошибку сохранения фильтров",
             description="Исправление ошибки при сохранении фильтра",
             module="Отчеты",
@@ -33,11 +33,10 @@ def sample_source_items() -> list[SourceItem]:
         ),
         SourceItem(
             id="OPS-310",
-            url="https://tracker.example.com/OPS-310",
+            url="https://tracker.yandex.ru/OPS-310",
             title="Оптимизировать фоновые задачи синхронизации",
             description="Техническая доработка фоновых задач",
             module="Интеграции",
             type=ItemType.TECHNICAL_IMPROVEMENT,
         ),
     ]
-

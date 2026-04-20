@@ -11,6 +11,7 @@ from app.models import (
     SummaryStatus,
     ValueCategory,
 )
+from app.review_utils import default_item_status, sanitize_digest_title, should_collect_description
 
 
 def build_release(source_items: Iterable[SourceItem], release_id: str, release_date: str) -> tuple[DigestRelease, List[DigestItem]]:
@@ -56,37 +57,41 @@ def generate_summary(items: List[DigestItem]) -> str:
 def _build_epic_digest_item(release_id: str, epic_id: str, epic_items: List[SourceItem]) -> DigestItem:
     primary = epic_items[0]
     item_type = primary.type
-    description = _narrative_for_feature_or_change(item_type, primary.module, primary.parent_epic_title or primary.title)
+    title = sanitize_digest_title(primary.parent_epic_title or primary.title)
+    description = _narrative_for_feature_or_change(item_type, primary.module, title)
     category = _default_category(item_type)
     return DigestItem(
         id=f"digest-{uuid4().hex[:10]}",
         release_id=release_id,
         source_item_ids=[item.id for item in epic_items],
-        title=primary.parent_epic_title or primary.title,
+        title=title,
         description=description,
         module=primary.module,
         type=item_type,
         category=category,
+        status=default_item_status(item_type),
         tracker_urls=[item.url for item in epic_items],
         grouping_mode=GroupingMode.EPIC_GROUP,
     )
 
 
 def _build_single_digest_item(release_id: str, source_item: SourceItem) -> DigestItem:
+    title = sanitize_digest_title(source_item.title)
     description = ""
     category = None
-    if source_item.type in {ItemType.NEW_FEATURE, ItemType.CHANGE}:
-        description = _narrative_for_feature_or_change(source_item.type, source_item.module, source_item.title)
+    if should_collect_description(source_item.type):
+        description = _narrative_for_feature_or_change(source_item.type, source_item.module, title)
         category = _default_category(source_item.type)
     return DigestItem(
         id=f"digest-{uuid4().hex[:10]}",
         release_id=release_id,
         source_item_ids=[source_item.id],
-        title=source_item.title,
+        title=title,
         description=description,
         module=source_item.module,
         type=source_item.type,
         category=category,
+        status=default_item_status(source_item.type),
         tracker_urls=[source_item.url],
         grouping_mode=GroupingMode.SINGLE_TASK,
     )
@@ -108,4 +113,3 @@ def _default_category(item_type: ItemType) -> ValueCategory:
     if item_type == ItemType.NEW_FEATURE:
         return ValueCategory.DAILY_WORK_CONVENIENCE
     return ValueCategory.CLARITY_TRANSPARENCY
-

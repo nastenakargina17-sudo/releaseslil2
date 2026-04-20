@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional
 
 from app.config import TrackerSettings
 from app.models import ItemType, SourceItem
+from app.review_utils import normalize_tracker_issue_url
 
 
 class TrackerAPIError(RuntimeError):
@@ -69,8 +70,9 @@ class TrackerAPIClient:
         if not isinstance(item, dict):
             raise TrackerAPIError("Tracker item must be an object")
 
-        item_id = str(item.get("id") or item.get("key") or "")
-        url = str(item.get("url") or item.get("self") or "")
+        issue_key = str(item.get("key") or item.get("id") or "")
+        item_id = issue_key
+        url = normalize_tracker_issue_url(issue_key, str(item.get("url") or item.get("self") or ""))
         if not item_id or not url:
             raise TrackerAPIError("Tracker item must include id/key and url/self")
 

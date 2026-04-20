@@ -39,6 +39,13 @@ from app.notifications.telegram import (
     build_review_status_message,
     release_is_ready_for_digest,
 )
+from app.review_utils import (
+    CATEGORY_LABELS,
+    DESCRIPTIONLESS_ITEM_TYPES,
+    ITEM_TYPE_LABELS,
+    STATUS_LABELS,
+    digest_blockers,
+)
 from app.services.ingest import build_release
 from app.services.importers import import_release_from_apis
 from app.services.mock_data import sample_source_items
@@ -278,6 +285,14 @@ def review_release(request: Request, release_id: str) -> HTMLResponse:
             "statuses": list(ItemStatus),
             "summary_statuses": list(SummaryStatus),
             "categories": list(ValueCategory),
+            "status_labels": STATUS_LABELS,
+            "category_labels": CATEGORY_LABELS,
+            "item_type_labels": ITEM_TYPE_LABELS,
+            "descriptionless_item_types": {item_type.value for item_type in DESCRIPTIONLESS_ITEM_TYPES},
+            "editable_statuses": [status for status in ItemStatus if status != ItemStatus.EXCLUDED],
+            "approved_status": ItemStatus.APPROVED.value,
+            "excluded_status": ItemStatus.EXCLUDED.value,
+            "approved_summary_status": SummaryStatus.APPROVED.value,
             "flash": flash,
             "digest_ready": digest_ready,
             "review_user": getattr(request.state, "review_session", {}).get("user"),
@@ -304,13 +319,15 @@ def update_review_item(
     category: Optional[str] = Form(None),
     status: str = Form(...),
     is_paid_feature: Optional[str] = Form(None),
+    exclude_from_release: Optional[str] = Form(None),
 ) -> RedirectResponse:
+    effective_status = ItemStatus.EXCLUDED.value if exclude_from_release == "on" else status
     update_item(
         item_id=item_id,
         title=title,
         description=description,
         category=category or None,
-        status=status,
+        status=effective_status,
         is_paid_feature=is_paid_feature == "on",
     )
     return RedirectResponse(url=f"/review/{release_id}", status_code=303)
@@ -375,9 +392,21 @@ def final_digest(request: Request, release_id: str) -> HTMLResponse:
     if release is None:
         raise HTTPException(status_code=404, detail="Release not found")
 
-    items = [item for item in list_items(release_id) if item.status == ItemStatus.APPROVED]
-    if release.summary_status != SummaryStatus.APPROVED:
-        raise HTTPException(status_code=400, detail="Summary is not approved")
+    all_items = list_items(release_id)
+    blockers = digest_blockers(release, all_items)
+    item_blockers = [blocker for blocker in blockers if blocker != "Summary не подтвержден"]
+    if item_blockers:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Не все задачи находятся в статусе подтверждения. "
+                "Для генерации дайджеста все задачи должны быть подтверждены."
+            ),
+        )
+    if blockers:
+        raise HTTPException(status_code=400, detail="Сначала подтвердите summary релиза.")
+
+    items = [item for item in all_items if item.status == ItemStatus.APPROVED]
 
     grouped_bugfixes = defaultdict(list)
     grouped_technical = defaultdict(list)
