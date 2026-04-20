@@ -9,7 +9,14 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from app.config import TEMPLATES_DIR, UPLOADS_DIR, get_app_settings, get_telegram_settings, load_env_file
+from app.config import (
+    TEMPLATES_DIR,
+    UPLOADS_DIR,
+    ensure_directories,
+    get_app_settings,
+    get_telegram_settings,
+    load_env_file,
+)
 from app.models import ItemStatus, ItemType, SummaryStatus, ValueCategory
 from app.notifications.telegram import (
     TelegramNotifier,
@@ -36,6 +43,7 @@ from app.storage import (
 app = FastAPI(title="Release Digest MVP")
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 load_env_file()
+ensure_directories()
 app.mount("/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
 
 
