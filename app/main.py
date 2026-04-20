@@ -134,11 +134,25 @@ def login_with_yandex(request: Request, next: str = "/") -> RedirectResponse:
 
 
 @app.get("/auth/yandex/callback")
-async def yandex_callback(request: Request, code: str, state: str) -> RedirectResponse:
+async def yandex_callback(
+    request: Request,
+    code: Optional[str] = None,
+    state: Optional[str] = None,
+    error: Optional[str] = None,
+    error_description: Optional[str] = None,
+) -> RedirectResponse:
+    if error:
+        return RedirectResponse(
+            url=f"/?auth_error={error_description or error}",
+            status_code=303,
+        )
+    if not code or not state:
+        return RedirectResponse(url="/?auth_error=missing_oauth_code", status_code=303)
+
     session = load_session(request, auth_settings)
     expected_state = session.get("oauth_state")
     if not expected_state or state != expected_state:
-        raise HTTPException(status_code=400, detail="Invalid OAuth state")
+        return RedirectResponse(url="/?auth_error=invalid_oauth_state", status_code=303)
 
     session.pop("oauth_state", None)
     next_url = session.pop("post_auth_redirect", "/")
@@ -147,7 +161,7 @@ async def yandex_callback(request: Request, code: str, state: str) -> RedirectRe
         access_token = await exchange_code_for_token(code, auth_settings)
         user_info = await fetch_yandex_user(access_token)
     except (AuthConfigurationError, OAuthExchangeError) as exc:
-        raise HTTPException(status_code=502, detail=str(exc))
+        return RedirectResponse(url=f"/?auth_error={str(exc)}", status_code=303)
 
     email = extract_user_email(user_info)
     if not is_allowed_email(email, auth_settings):

@@ -15,6 +15,12 @@
   {% endif %}
   {% if auth_error == "access_denied" %}
     <p style="color: #b00020;">Доступ к review открыт только для сотрудников из списка разрешенных email.</p>
+  {% elif auth_error == "missing_oauth_code" %}
+    <p style="color: #b00020;">Яндекс не вернул код авторизации. Попробуйте снова зайти в review по новой ссылке.</p>
+  {% elif auth_error == "invalid_oauth_state" %}
+    <p style="color: #b00020;">Сессия авторизации устарела или не совпала. Откройте review заново и повторите вход.</p>
+  {% elif auth_error %}
+    <p style="color: #b00020;">Ошибка авторизации: {{ auth_error }}</p>
   {% endif %}
   {% if review_user %}
     <p>В review вошёл: <strong>{{ review_user.name }}</strong> ({{ review_user.email }})</p>

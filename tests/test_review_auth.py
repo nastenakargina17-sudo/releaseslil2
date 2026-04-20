@@ -144,6 +144,15 @@ class ReviewAuthTests(unittest.TestCase):
         self.assertEqual(callback_response.status_code, 303)
         self.assertEqual(callback_response.headers["location"], "/?auth_error=access_denied")
 
+    def test_callback_without_code_redirects_with_readable_error(self) -> None:
+        response = self.client.get(
+            "/auth/yandex/callback?state=test-state",
+            follow_redirects=False,
+        )
+
+        self.assertEqual(response.status_code, 303)
+        self.assertEqual(response.headers["location"], "/?auth_error=missing_oauth_code")
+
 
 if __name__ == "__main__":
     unittest.main()
