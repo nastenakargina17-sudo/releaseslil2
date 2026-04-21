@@ -1,3 +1,4 @@
+import json
 import httpx
 from pathlib import Path
 from typing import Any, Optional
@@ -53,7 +54,7 @@ class TelegramNotifier:
         if caption:
             data["caption"] = caption
         if reply_markup:
-            data["reply_markup"] = reply_markup
+            data["reply_markup"] = json.dumps(reply_markup, ensure_ascii=False)
         with path.open("rb") as photo_file, httpx.Client(timeout=30.0) as client:
             response = client.post(
                 url,

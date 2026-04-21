@@ -1,4 +1,5 @@
 import importlib
+import json
 import tempfile
 import unittest
 from typing import Optional
@@ -125,6 +126,50 @@ class TelegramWebhookTests(unittest.TestCase):
             },
         )
         service.notifier.send_message.assert_not_called()
+
+    def test_send_photo_serializes_reply_markup_for_multipart_request(self) -> None:
+        from app.notifications.telegram import TelegramNotifier
+
+        image_path = Path(self.temp_dir.name) / "welcome.png"
+        image_path.write_bytes(b"png")
+        notifier = TelegramNotifier(
+            self.config.TelegramSettings(
+                bot_token="token",
+                chat_id="390144191",
+                welcome_image_path=str(image_path),
+                import_image_path=str(image_path),
+            )
+        )
+        response = MagicMock()
+        response.raise_for_status.return_value = None
+        client = MagicMock()
+        client.post.return_value = response
+        client.__enter__.return_value = client
+        client.__exit__.return_value = None
+
+        with patch("app.notifications.telegram.httpx.Client", return_value=client):
+            notifier.send_photo(
+                str(image_path),
+                caption="Привет",
+                reply_markup={
+                    "inline_keyboard": [
+                        [{"text": "Показать список релизов", "callback_data": "list_releases"}]
+                    ]
+                },
+            )
+
+        _, kwargs = client.post.call_args
+        self.assertEqual(
+            kwargs["data"]["reply_markup"],
+            json.dumps(
+                {
+                    "inline_keyboard": [
+                        [{"text": "Показать список релизов", "callback_data": "list_releases"}]
+                    ]
+                },
+                ensure_ascii=False,
+            ),
+        )
 
     def test_release_list_message_uses_updated_copy(self) -> None:
         from app.notifications.telegram import build_release_list_message
