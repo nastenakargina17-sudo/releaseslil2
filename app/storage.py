@@ -186,6 +186,18 @@ def add_item_image(item_id: str, image_path: str) -> None:
         )
 
 
+def remove_item_image(item_id: str, image_path: str) -> None:
+    item = get_item(item_id)
+    if item is None:
+        return
+    image_paths = [path for path in item.image_paths if path != image_path]
+    with connect() as conn:
+        conn.execute(
+            "UPDATE digest_items SET image_paths = ? WHERE id = ?",
+            (json.dumps(image_paths), item_id),
+        )
+
+
 def _row_to_item(row: sqlite3.Row) -> DigestItem:
     category = row["category"]
     return DigestItem(

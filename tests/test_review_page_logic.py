@@ -1,4 +1,5 @@
 import importlib
+import io
 import os
 import tempfile
 import unittest
@@ -141,6 +142,55 @@ class DigestGuardTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertIn("Не все задачи находятся в статусе подтверждения", response.text)
+
+    def test_item_save_supports_ajax_without_redirect(self) -> None:
+        response = self.client.post(
+            "/review/2026-04/items/item-1",
+            data={
+                "title": "Updated title",
+                "description": "Updated description",
+                "category": "",
+                "status": "approved",
+            },
+            headers={"X-Requested-With": "XMLHttpRequest"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["ok"], True)
+        self.assertEqual(self.storage.get_item("item-1").title, "Updated title")
+        self.assertEqual(self.storage.get_item("item-1").status, ItemStatus.APPROVED)
+
+    def test_upload_validates_media_type_and_size(self) -> None:
+        response = self.client.post(
+            "/review/2026-04/items/item-1/image",
+            files={"image": ("notes.txt", io.BytesIO(b"hello"), "text/plain")},
+            headers={"X-Requested-With": "XMLHttpRequest"},
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("Поддерживаются JPG, PNG, WEBP, GIF, MP4 и WEBM.", response.text)
+
+    def test_uploaded_media_can_be_deleted(self) -> None:
+        upload_response = self.client.post(
+            "/review/2026-04/items/item-1/image",
+            files={"image": ("preview.webp", io.BytesIO(b"fake-image"), "image/webp")},
+            headers={"X-Requested-With": "XMLHttpRequest"},
+        )
+
+        self.assertEqual(upload_response.status_code, 200)
+        media_path = upload_response.json()["media_paths"][0]
+        stored_path = self.main.UPLOADS_DIR / Path(media_path).name
+        self.assertTrue(stored_path.exists())
+
+        delete_response = self.client.post(
+            "/review/2026-04/items/item-1/image/delete",
+            data={"image_path": media_path},
+            headers={"X-Requested-With": "XMLHttpRequest"},
+        )
+
+        self.assertEqual(delete_response.status_code, 200)
+        self.assertEqual(delete_response.json()["media_paths"], [])
+        self.assertFalse(stored_path.exists())
 
 
 if __name__ == "__main__":

@@ -2,11 +2,12 @@ from pathlib import Path
 from uuid import uuid4
 
 from collections import defaultdict, deque
+import mimetypes
 from typing import Optional
 from urllib.parse import urlencode
 
 from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -57,6 +58,7 @@ from app.storage import (
     init_db,
     get_item,
     list_items,
+    remove_item_image,
     replace_release_items,
     update_item,
     update_release_summary,
@@ -72,6 +74,13 @@ app.mount("/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
 app.state.processed_telegram_update_ids = set()
 app.state.processed_telegram_update_order = deque()
 app.state.processed_telegram_update_limit = 1000
+
+IMAGE_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
+GIF_CONTENT_TYPES = {"image/gif"}
+VIDEO_CONTENT_TYPES = {"video/mp4", "video/webm"}
+IMAGE_MAX_BYTES = 5 * 1024 * 1024
+GIF_MAX_BYTES = 8 * 1024 * 1024
+VIDEO_MAX_BYTES = 20 * 1024 * 1024
 
 
 @app.on_event("startup")
@@ -296,22 +305,37 @@ def review_release(request: Request, release_id: str) -> HTMLResponse:
             "flash": flash,
             "digest_ready": digest_ready,
             "review_user": getattr(request.state, "review_session", {}).get("user"),
+            "media_limits": {
+                "image_mb": IMAGE_MAX_BYTES // (1024 * 1024),
+                "gif_mb": GIF_MAX_BYTES // (1024 * 1024),
+                "video_mb": VIDEO_MAX_BYTES // (1024 * 1024),
+            },
         },
     )
 
 
 @app.post("/review/{release_id}/summary")
 def update_summary(
+    request: Request,
     release_id: str,
     summary: str = Form(...),
     summary_status: str = Form(...),
-) -> RedirectResponse:
+) -> Response:
     update_release_summary(release_id, summary, summary_status)
+    if _wants_json(request):
+        return JSONResponse(
+            {
+                "ok": True,
+                "message": "Summary успешно сохранено.",
+                "summary_status": summary_status,
+            }
+        )
     return RedirectResponse(url=f"/review/{release_id}", status_code=303)
 
 
 @app.post("/review/{release_id}/items/{item_id}")
 def update_review_item(
+    request: Request,
     release_id: str,
     item_id: str,
     title: str = Form(...),
@@ -320,7 +344,7 @@ def update_review_item(
     status: str = Form(...),
     is_paid_feature: Optional[str] = Form(None),
     exclude_from_release: Optional[str] = Form(None),
-) -> RedirectResponse:
+) -> Response:
     effective_status = ItemStatus.EXCLUDED.value if exclude_from_release == "on" else status
     update_item(
         item_id=item_id,
@@ -330,26 +354,86 @@ def update_review_item(
         status=effective_status,
         is_paid_feature=is_paid_feature == "on",
     )
+    if _wants_json(request):
+        return JSONResponse(
+            {
+                "ok": True,
+                "message": "Пункт успешно сохранен.",
+                "item_id": item_id,
+                "status": effective_status,
+            }
+        )
     return RedirectResponse(url=f"/review/{release_id}", status_code=303)
 
 
 @app.post("/review/{release_id}/items/{item_id}/image")
 async def upload_item_image(
+    request: Request,
     release_id: str,
     item_id: str,
     image: UploadFile = File(...),
-) -> RedirectResponse:
+) -> Response:
     item = get_item(item_id)
     if item is None:
         raise HTTPException(status_code=404, detail="Digest item not found")
 
-    suffix = Path(image.filename or "upload").suffix or ".bin"
+    content = await image.read()
+    content_type = (image.content_type or "").lower()
+    size_limit = _max_bytes_for_upload(content_type)
+    if size_limit is None:
+        raise HTTPException(status_code=400, detail="Поддерживаются JPG, PNG, WEBP, GIF, MP4 и WEBM.")
+    if len(content) > size_limit:
+        raise HTTPException(status_code=400, detail=_file_too_large_message(content_type, size_limit))
+
+    suffix = Path(image.filename or "upload").suffix.lower()
+    if not suffix:
+        suffix = mimetypes.guess_extension(content_type) or ".bin"
     safe_name = f"{release_id}_{item_id}_{uuid4().hex[:8]}{suffix}"
     destination = UPLOADS_DIR / safe_name
-    content = await image.read()
     destination.write_bytes(content)
     add_item_image(item_id, f"/uploads/{safe_name}")
+    updated_item = get_item(item_id)
+    if _wants_json(request):
+        return JSONResponse(
+            {
+                "ok": True,
+                "message": "Файл успешно загружен.",
+                "item_id": item_id,
+                "media_paths": updated_item.image_paths if updated_item else [],
+            }
+        )
     return RedirectResponse(url=f"/review/{release_id}?flash=image_uploaded", status_code=303)
+
+
+@app.post("/review/{release_id}/items/{item_id}/image/delete")
+def delete_item_image(
+    request: Request,
+    release_id: str,
+    item_id: str,
+    image_path: str = Form(...),
+) -> Response:
+    item = get_item(item_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Digest item not found")
+    if image_path not in item.image_paths:
+        raise HTTPException(status_code=404, detail="Файл не найден")
+
+    remove_item_image(item_id, image_path)
+    local_path = _upload_path_from_public_path(image_path)
+    if local_path and local_path.exists():
+        local_path.unlink()
+
+    updated_item = get_item(item_id)
+    if _wants_json(request):
+        return JSONResponse(
+            {
+                "ok": True,
+                "message": "Файл удален.",
+                "item_id": item_id,
+                "media_paths": updated_item.image_paths if updated_item else [],
+            }
+        )
+    return RedirectResponse(url=f"/review/{release_id}", status_code=303)
 
 
 @app.post("/review/{release_id}/notify-review")
@@ -434,3 +518,32 @@ def final_digest(request: Request, release_id: str) -> HTMLResponse:
             "grouped_technical": dict(grouped_technical),
         },
     )
+
+
+def _wants_json(request: Request) -> bool:
+    return request.headers.get("x-requested-with") == "XMLHttpRequest"
+
+
+def _max_bytes_for_upload(content_type: str) -> Optional[int]:
+    if content_type in IMAGE_CONTENT_TYPES:
+        return IMAGE_MAX_BYTES
+    if content_type in GIF_CONTENT_TYPES:
+        return GIF_MAX_BYTES
+    if content_type in VIDEO_CONTENT_TYPES:
+        return VIDEO_MAX_BYTES
+    return None
+
+
+def _file_too_large_message(content_type: str, size_limit: int) -> str:
+    size_mb = size_limit // (1024 * 1024)
+    if content_type in GIF_CONTENT_TYPES:
+        return f"GIF должен быть не больше {size_mb} МБ."
+    if content_type in VIDEO_CONTENT_TYPES:
+        return f"Видео должно быть не больше {size_mb} МБ."
+    return f"Изображение должно быть не больше {size_mb} МБ."
+
+
+def _upload_path_from_public_path(image_path: str) -> Optional[Path]:
+    if not image_path.startswith("/uploads/"):
+        return None
+    return UPLOADS_DIR / Path(image_path).name
