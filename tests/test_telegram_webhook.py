@@ -101,6 +101,77 @@ class TelegramWebhookTests(unittest.TestCase):
         self.assertEqual(notifier.calls[0][0], "answer")
         self.assertEqual(notifier.calls[1], ("import", "2026-04"))
 
+    def test_start_message_uses_welcome_photo_with_caption(self) -> None:
+        import app.services.telegram_bot
+
+        telegram_bot = importlib.reload(app.services.telegram_bot)
+        service = telegram_bot.TelegramBotService()
+        service.notifier = MagicMock()
+        service.notifier.settings.welcome_image_path = "/tmp/notis-welcome.png"
+
+        service.handle_message({"chat": {"id": 390144191}, "text": "/start"})
+
+        service.notifier.send_photo.assert_called_once_with(
+            "/tmp/notis-welcome.png",
+            caption=(
+                "Привет. Я Нотис — архивариус релизов.\n\n"
+                "Я собираю изменения, привожу их в порядок и превращаю в понятные "
+                "релиз-дайджесты.\n\n"
+                "Ниже ты найдёшь список доступных релизов."
+            ),
+            chat_id="390144191",
+            reply_markup={
+                "inline_keyboard": [[{"text": "Показать список релизов", "callback_data": "list_releases"}]]
+            },
+        )
+        service.notifier.send_message.assert_not_called()
+
+    def test_release_list_message_uses_updated_copy(self) -> None:
+        from app.notifications.telegram import build_release_list_message
+
+        self.assertEqual(
+            build_release_list_message(),
+            "Доступные релизы уже собраны. Выбери нужный.",
+        )
+
+    def test_import_release_sends_photo_caption_when_image_is_configured(self) -> None:
+        import app.services.importers
+
+        importers = importlib.reload(app.services.importers)
+
+        with patch.object(importers, "TrackerAPIClient") as tracker_cls, patch.object(
+            importers, "ConfluenceAPIClient"
+        ) as confluence_cls, patch.object(importers, "build_release") as build_release, patch.object(
+            importers, "upsert_release"
+        ), patch.object(importers, "replace_release_items"), patch.object(
+            importers, "get_telegram_settings"
+        ) as get_telegram_settings, patch.object(
+            importers, "TelegramNotifier"
+        ) as notifier_cls:
+            tracker_cls.return_value.fetch_release_items.return_value = ["source-item"]
+            confluence_cls.return_value.fetch_release_date.return_value = "2026-04-30"
+            build_release.return_value = (object(), [object(), object(), object()])
+            get_telegram_settings.return_value = self.config.TelegramSettings(
+                bot_token="token",
+                chat_id="390144191",
+                welcome_image_path="/tmp/notis-welcome.png",
+                import_image_path="/tmp/notis-import.png",
+            )
+            notifier = MagicMock()
+            notifier_cls.return_value = notifier
+
+            importers.import_release_from_apis("2026-04")
+
+        notifier.send_photo.assert_called_once_with(
+            "/tmp/notis-import.png",
+            caption=(
+                "☑️ Релиз 2026-04 импортирован.\n"
+                "Подготовлено пунктов для ревью: 3.\n"
+                "Собираю итоговую версию для ревью..."
+            ),
+        )
+        notifier.send_message.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

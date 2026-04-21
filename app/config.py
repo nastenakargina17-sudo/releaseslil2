@@ -35,6 +35,8 @@ class ConfluenceSettings:
 class TelegramSettings:
     bot_token: str
     chat_id: str
+    welcome_image_path: str
+    import_image_path: str
 
 
 @dataclass(frozen=True)
@@ -85,6 +87,14 @@ def get_telegram_settings() -> TelegramSettings:
     return TelegramSettings(
         bot_token=os.getenv("TELEGRAM_BOT_TOKEN", ""),
         chat_id=os.getenv("TELEGRAM_CHAT_ID", ""),
+        welcome_image_path=os.getenv(
+            "TELEGRAM_WELCOME_IMAGE_PATH",
+            str(BASE_DIR / "app" / "assets" / "notis-welcome.png"),
+        ),
+        import_image_path=os.getenv(
+            "TELEGRAM_IMPORT_IMAGE_PATH",
+            str(BASE_DIR / "app" / "assets" / "notis-import.png"),
+        ),
     )
 
 

@@ -25,10 +25,21 @@ class TelegramBotService:
         if not chat_id:
             return
         if text == "/start":
+            welcome_message = build_bot_welcome_message()
+            reply_markup = build_start_keyboard()
+            welcome_image_path = self.notifier.settings.welcome_image_path
+            if welcome_image_path:
+                self.notifier.send_photo(
+                    welcome_image_path,
+                    caption=welcome_message,
+                    chat_id=chat_id,
+                    reply_markup=reply_markup,
+                )
+                return
             self.notifier.send_message(
-                build_bot_welcome_message(),
+                welcome_message,
                 chat_id=chat_id,
-                reply_markup=build_start_keyboard(),
+                reply_markup=reply_markup,
             )
 
     def handle_callback_query(self, callback_query: dict) -> None:

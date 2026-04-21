@@ -1,4 +1,5 @@
 import httpx
+from pathlib import Path
 from typing import Any, Optional
 
 from app.config import TelegramSettings
@@ -34,6 +35,33 @@ class TelegramNotifier:
             response = client.post(url, json=payload)
             response.raise_for_status()
 
+    def send_photo(
+        self,
+        photo_path: str,
+        caption: Optional[str] = None,
+        chat_id: Optional[str] = None,
+        reply_markup: Optional[dict[str, Any]] = None,
+    ) -> None:
+        target_chat_id = chat_id or self.settings.chat_id
+        if not self.settings.bot_token or not target_chat_id:
+            raise TelegramNotificationError("Telegram settings are not configured")
+        path = Path(photo_path)
+        if not path.is_file():
+            raise TelegramNotificationError(f"Telegram photo is not available: {path}")
+        url = f"https://api.telegram.org/bot{self.settings.bot_token}/sendPhoto"
+        data: dict[str, Any] = {"chat_id": target_chat_id}
+        if caption:
+            data["caption"] = caption
+        if reply_markup:
+            data["reply_markup"] = reply_markup
+        with path.open("rb") as photo_file, httpx.Client(timeout=30.0) as client:
+            response = client.post(
+                url,
+                data=data,
+                files={"photo": (path.name, photo_file, "image/png")},
+            )
+            response.raise_for_status()
+
     def answer_callback_query(self, callback_query_id: str, text: Optional[str] = None) -> None:
         if not self.settings.bot_token:
             raise TelegramNotificationError("Telegram settings are not configured")
@@ -56,22 +84,25 @@ class TelegramNotifier:
 
 
 def build_release_import_message(release_id: str, release_date: str, item_count: int) -> str:
+    del release_date
     return (
-        f"Импортирован релиз {release_id}\n"
-        f"Плановая дата релиза: {release_date}\n"
-        f"Подготовлено пунктов для ревью: {item_count}"
+        f"☑️ Релиз {release_id} импортирован.\n"
+        f"Подготовлено пунктов для ревью: {item_count}.\n"
+        "Собираю итоговую версию для ревью..."
     )
 
 
 def build_bot_welcome_message() -> str:
     return (
-        "Привет! Я помогу с релиз-дайджестами.\n\n"
-        "Нажмите кнопку ниже, чтобы показать список релизов."
+        "Привет. Я Нотис — архивариус релизов.\n\n"
+        "Я собираю изменения, привожу их в порядок и превращаю в понятные "
+        "релиз-дайджесты.\n\n"
+        "Ниже ты найдёшь список доступных релизов."
     )
 
 
 def build_release_list_message() -> str:
-    return "Выберите релиз из списка:"
+    return "Доступные релизы уже собраны. Выбери нужный."
 
 
 def build_release_review_message(release_id: str, release_date: str, review_url: str) -> str:
