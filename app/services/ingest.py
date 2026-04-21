@@ -1,5 +1,5 @@
 from collections import defaultdict
-from typing import Dict, Iterable, List
+from typing import Dict, Iterable, List, Optional
 from uuid import uuid4
 
 from app.models import (
@@ -12,9 +12,15 @@ from app.models import (
     ValueCategory,
 )
 from app.review_utils import default_item_status, sanitize_digest_title, should_collect_description
+from app.services.openai_generation import OpenAIGenerationError, OpenAIReleaseCopyGenerator
 
 
-def build_release(source_items: Iterable[SourceItem], release_id: str, release_date: str) -> tuple[DigestRelease, List[DigestItem]]:
+def build_release(
+    source_items: Iterable[SourceItem],
+    release_id: str,
+    release_date: str,
+    copy_generator: Optional[OpenAIReleaseCopyGenerator] = None,
+) -> tuple[DigestRelease, List[DigestItem]]:
     items = list(source_items)
     grouped: Dict[str, List[SourceItem]] = defaultdict(list)
     singles: List[SourceItem] = []
@@ -26,12 +32,17 @@ def build_release(source_items: Iterable[SourceItem], release_id: str, release_d
             singles.append(item)
 
     digest_items: List[DigestItem] = []
+    digest_item_sources: Dict[str, List[SourceItem]] = {}
 
     for epic_id, epic_items in grouped.items():
-        digest_items.append(_build_epic_digest_item(release_id, epic_id, epic_items))
+        digest_item = _build_epic_digest_item(release_id, epic_id, epic_items)
+        digest_items.append(digest_item)
+        digest_item_sources[digest_item.id] = list(epic_items)
 
     for source_item in singles:
-        digest_items.append(_build_single_digest_item(release_id, source_item))
+        digest_item = _build_single_digest_item(release_id, source_item)
+        digest_items.append(digest_item)
+        digest_item_sources[digest_item.id] = [source_item]
 
     release = DigestRelease(
         id=release_id,
@@ -39,6 +50,9 @@ def build_release(source_items: Iterable[SourceItem], release_id: str, release_d
         summary=generate_summary(digest_items),
         summary_status=SummaryStatus.DRAFT,
     )
+
+    if copy_generator and copy_generator.is_enabled():
+        _enrich_release_with_ai_copy(copy_generator, release, digest_items, digest_item_sources)
     return release, digest_items
 
 
@@ -113,3 +127,25 @@ def _default_category(item_type: ItemType) -> ValueCategory:
     if item_type == ItemType.NEW_FEATURE:
         return ValueCategory.DAILY_WORK_CONVENIENCE
     return ValueCategory.CLARITY_TRANSPARENCY
+
+
+def _enrich_release_with_ai_copy(
+    copy_generator: OpenAIReleaseCopyGenerator,
+    release: DigestRelease,
+    digest_items: List[DigestItem],
+    digest_item_sources: Dict[str, List[SourceItem]],
+) -> None:
+    try:
+        release.summary = copy_generator.generate_summary(release, digest_items)
+    except OpenAIGenerationError:
+        pass
+
+    try:
+        generated_descriptions = copy_generator.generate_item_descriptions(digest_items, digest_item_sources)
+    except OpenAIGenerationError:
+        return
+
+    for item in digest_items:
+        generated_description = generated_descriptions.get(item.id)
+        if generated_description and should_collect_description(item.type):
+            item.description = generated_description

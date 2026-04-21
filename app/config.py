@@ -45,6 +45,13 @@ class AppSettings:
 
 
 @dataclass(frozen=True)
+class OpenAISettings:
+    api_key: str
+    model: str
+    timeout_seconds: float
+
+
+@dataclass(frozen=True)
 class AuthSettings:
     session_secret: str
     session_https_only: bool
@@ -101,6 +108,14 @@ def get_telegram_settings() -> TelegramSettings:
 def get_app_settings() -> AppSettings:
     return AppSettings(
         base_url=os.getenv("APP_BASE_URL", "").rstrip("/"),
+    )
+
+
+def get_openai_settings() -> OpenAISettings:
+    return OpenAISettings(
+        api_key=os.getenv("OPENAI_API_KEY", ""),
+        model=os.getenv("OPENAI_MODEL", "gpt-4o-mini").strip() or "gpt-4o-mini",
+        timeout_seconds=float(os.getenv("OPENAI_TIMEOUT_SECONDS", "60")),
     )
 
 
