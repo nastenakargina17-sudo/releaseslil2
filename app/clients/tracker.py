@@ -18,6 +18,7 @@ MODULE_NAME_MAP = {
     "ATSCore": "Ядро",
     "AtsCore": "Ядро",
     "AtsFramework": "Ядро",
+    "Client Task": "Клиентский запрос",
     "Configurator": "Конфигуратор",
     "Assessment": "Тестирование и оценка",
     "Reporting": "Отчеты и импорты",
@@ -31,6 +32,15 @@ MODULE_NAME_MAP = {
     "Audit": "Аудит",
     "Personal Data": "Персональные данные",
     "AI": "Искусственный интеллект",
+    "MS Sourcing Integrator": "Микросервисы",
+    "MS Activity Stream": "Микросервисы",
+    "MS Landings": "Микросервисы",
+    "MS Magnit": "Микросервисы",
+    "MS Marketplace": "Микросервисы",
+    "MS Megafon": "Микросервисы",
+    "MS Mindight SDE": "Микросервисы",
+    "MS VTB": "Микросервисы",
+    "MS X5": "Микросервисы",
 }
 
 
@@ -160,4 +170,4 @@ def _map_module_name(components: List[Any]) -> str:
             return MODULE_NAME_MAP[display]
     if displays:
         return displays[0]
-    return "Без модуля"
+    return "Клиентский запрос"

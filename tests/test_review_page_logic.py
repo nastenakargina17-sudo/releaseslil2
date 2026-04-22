@@ -29,6 +29,22 @@ class ReviewPageLogicTests(unittest.TestCase):
             "https://tracker.yandex.ru/DEV-31469",
         )
 
+    def test_tracker_module_mapping_uses_custom_business_labels(self) -> None:
+        from app.clients.tracker import _map_module_name
+
+        self.assertEqual(
+            _map_module_name([{"display": "Client Task"}]),
+            "Клиентский запрос",
+        )
+        self.assertEqual(
+            _map_module_name([{"display": "MS Marketplace"}]),
+            "Микросервисы",
+        )
+        self.assertEqual(
+            _map_module_name([]),
+            "Клиентский запрос",
+        )
+
     def test_bugfix_and_technical_items_default_to_approved(self) -> None:
         from app.services.ingest import build_release
 
