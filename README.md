@@ -33,6 +33,9 @@ Configure integrations through environment variables:
 - `CONFLUENCE_API_BASE_URL`
 - `CONFLUENCE_API_TOKEN`
 - `CONFLUENCE_RELEASE_SCHEDULE_PAGE_ID`
+- `OPENAI_API_KEY`
+- `OPENAI_MODEL`
+- `OPENAI_TIMEOUT_SECONDS`
 - `TELEGRAM_BOT_TOKEN`
 - `TELEGRAM_CHAT_ID`
 - `SESSION_SECRET`
@@ -52,14 +55,21 @@ The MVP now supports:
 
 ## Deployment
 
-The repository includes [render.yaml](/Users/user/Downloads/релиз%20ноутс2/render.yaml:1) for a first public deployment on Render.
+The currently used production deployment is Railway.
 
-Before deploying:
+- Project: `releaseslil2`
+- Service: `ReleaseCraft`
+- Production domain: `releaseslil2-production.up.railway.app`
+- Telegram bot webhook is handled by the main web app at `/telegram/webhook`
 
-1. Push the repo to GitHub.
-2. Create a Render Blueprint or Web Service from the repo.
-3. Fill all secret env vars in Render.
-4. Set `APP_BASE_URL` to the public service URL.
+Important notes:
+
+1. The Telegram bot does not run as a separate worker in this repo.
+2. Bot callbacks are handled by the FastAPI app in `app.main`.
+3. If the bot behaves differently from local code, check the deployed Railway service first.
+4. For GPT-generated release copy to work in production, the Railway service must have `OPENAI_API_KEY`, `OPENAI_MODEL`, and `OPENAI_TIMEOUT_SECONDS` configured.
+
+The repository also still includes [render.yaml](/Users/user/Downloads/релиз%20ноутс2/render.yaml:1) from an earlier deployment option, but the active environment we verified is Railway.
 
 ## Current Scope
 
