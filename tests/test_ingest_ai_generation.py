@@ -4,13 +4,17 @@ from app.models import ItemType, SourceItem
 from app.services.ingest import build_release
 from app.services.openai_generation import (
     _build_item_descriptions_prompt,
+    _build_item_repair_prompt,
     _build_item_rewrite_prompt,
     _build_summary_prompt,
+    _build_summary_repair_prompt,
     _build_summary_rewrite_prompt,
     _cleanup_item_description_text,
     _cleanup_summary_text,
     _normalize_generated_text,
     _normalize_summary_number_words,
+    _validate_item_description_text,
+    _validate_summary_text,
 )
 
 
@@ -159,6 +163,8 @@ class IngestAIGenerationTests(unittest.TestCase):
         summary_prompt = _build_summary_rewrite_prompt("Черновой summary", stats)
         self.assertIn("Не делай баги главным акцентом текста", summary_prompt)
         self.assertIn("порядок должен быть такой: новые функции, изменения, технические итерации, баги", summary_prompt)
+        repair_summary_prompt = _build_summary_repair_prompt("Плохой summary", stats, ["канцелярит"])
+        self.assertIn("Исправь summary релиза", repair_summary_prompt)
 
         source_items = _sample_source_items()
         _, items = build_release(source_items, release_id="2026-05", release_date="2026-05-31")
@@ -169,8 +175,14 @@ class IngestAIGenerationTests(unittest.TestCase):
             item_sources,
             {item.id: "Черновое описание" for item in eligible_items},
         )
-        self.assertIn("Для feature лучше начинать с", rewrite_prompt)
+        self.assertIn("Для feature обычно лучше начинать с того, что появилось", rewrite_prompt)
         self.assertIn("Не делай текст похожим на технический changelog", rewrite_prompt)
+        repair_item_prompt = _build_item_repair_prompt(
+            [(eligible_items[0], ["слишком шаблонно"])],
+            item_sources,
+            {eligible_items[0].id: "Черновое описание"},
+        )
+        self.assertIn("Исправь описания пунктов релиза", repair_item_prompt)
 
     def test_generated_text_normalization_removes_cjk_symbols(self) -> None:
         normalized = _normalize_generated_text("Соблюдение法律 152-ФЗ и порядок обработки данных.")
@@ -206,6 +218,14 @@ class IngestAIGenerationTests(unittest.TestCase):
         change_text = _cleanup_item_description_text("Реализована история согласий.", ItemType.CHANGE)
         self.assertTrue(feature_text.startswith("Добавили"))
         self.assertTrue(change_text.startswith("Обновили"))
+
+    def test_validators_detect_bad_copy_patterns(self) -> None:
+        summary_issues = _validate_summary_text("В данном в этом релизе реализовано много задач.")
+        item_issues = _validate_item_description_text(
+            "Реализована доработка. Это помогает в ежедневной работе и это позволяет улучшить процесс."
+        )
+        self.assertTrue(summary_issues)
+        self.assertTrue(item_issues)
 
 
 def _sample_source_items():
