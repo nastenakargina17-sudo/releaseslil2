@@ -79,9 +79,9 @@ class TelegramWebhookTests(unittest.TestCase):
             get_release.return_value = None
             list_items.return_value = []
 
-            def import_side_effect(release_id: str) -> None:
-                import_calls.append(release_id)
-                notifier.calls.append(("import", release_id))
+            def import_side_effect(release_id: str, preserve_existing_copy: bool = True) -> None:
+                import_calls.append((release_id, preserve_existing_copy))
+                notifier.calls.append(("import", release_id, preserve_existing_copy))
 
             import_release.side_effect = import_side_effect
 
@@ -98,9 +98,9 @@ class TelegramWebhookTests(unittest.TestCase):
             )
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(import_calls, ["2026-04"])
+        self.assertEqual(import_calls, [("2026-04", False)])
         self.assertEqual(notifier.calls[0][0], "answer")
-        self.assertEqual(notifier.calls[1], ("import", "2026-04"))
+        self.assertEqual(notifier.calls[1], ("import", "2026-04", False))
 
     def test_start_message_uses_welcome_photo_with_caption(self) -> None:
         import app.services.telegram_bot
@@ -189,6 +189,10 @@ class TelegramWebhookTests(unittest.TestCase):
         ) as confluence_cls, patch.object(importers, "build_release") as build_release, patch.object(
             importers, "upsert_release"
         ), patch.object(importers, "replace_release_items"), patch.object(
+            importers, "get_release", return_value=None
+        ), patch.object(
+            importers, "list_items", return_value=[]
+        ), patch.object(
             importers, "get_telegram_settings"
         ) as get_telegram_settings, patch.object(
             importers, "TelegramNotifier"
@@ -205,7 +209,7 @@ class TelegramWebhookTests(unittest.TestCase):
             notifier = MagicMock()
             notifier_cls.return_value = notifier
 
-            importers.import_release_from_apis("2026-04")
+            importers.import_release_from_apis("2026-04", preserve_existing_copy=False)
 
         notifier.send_photo.assert_called_once_with(
             "/tmp/notis-import.png",

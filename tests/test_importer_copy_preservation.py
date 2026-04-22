@@ -57,6 +57,36 @@ class ImporterCopyPreservationTests(unittest.TestCase):
 
         self.assertEqual(new_item.description, "Хорошее описание от GPT.")
 
+    def test_existing_copy_is_not_preserved_when_preservation_is_disabled(self) -> None:
+        existing_release = DigestRelease(
+            id="DEV-1",
+            release_date="2026-02-03",
+            summary="Хороший summary от GPT.",
+            summary_status=SummaryStatus.DRAFT,
+        )
+        new_release = DigestRelease(
+            id="DEV-1",
+            release_date="2026-02-03",
+            summary="Шаблонный summary.",
+            summary_status=SummaryStatus.DRAFT,
+        )
+        new_item = _build_item(
+            "digest-new",
+            "DEV-101",
+            "Новый пункт",
+            'В модуле Ядро добавили новое улучшение вокруг сценария "Новый пункт", чтобы пользователям было проще выполнять ежедневные операции и быстрее проходить рабочие шаги.',
+        )
+
+        # Simulate the disabled preservation path used by manual bot re-imports.
+        preserved_release = new_release
+        preserved_items = [new_item]
+
+        self.assertEqual(preserved_release.summary, "Шаблонный summary.")
+        self.assertEqual(
+            preserved_items[0].description,
+            'В модуле Ядро добавили новое улучшение вокруг сценария "Новый пункт", чтобы пользователям было проще выполнять ежедневные операции и быстрее проходить рабочие шаги.',
+        )
+
 
 def _build_item(item_id: str, source_id: str, title: str, description: str) -> DigestItem:
     return DigestItem(

@@ -11,7 +11,7 @@ from app.services.openai_generation import OpenAIReleaseCopyGenerator
 from app.storage import get_release, list_items, replace_release_items, upsert_release
 
 
-def import_release_from_apis(release_id: str) -> None:
+def import_release_from_apis(release_id: str, preserve_existing_copy: bool = True) -> None:
     tracker_client = TrackerAPIClient(get_tracker_settings())
     confluence_client = ConfluenceAPIClient(get_confluence_settings())
     copy_generator = OpenAIReleaseCopyGenerator(get_openai_settings())
@@ -26,7 +26,8 @@ def import_release_from_apis(release_id: str) -> None:
         release_date,
         copy_generator=copy_generator,
     )
-    _preserve_existing_copy_when_ai_falls_back(existing_release, existing_items, release, digest_items)
+    if preserve_existing_copy:
+        _preserve_existing_copy_when_ai_falls_back(existing_release, existing_items, release, digest_items)
 
     upsert_release(release)
     replace_release_items(release_id, digest_items)
