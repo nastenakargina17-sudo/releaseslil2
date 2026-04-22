@@ -6,7 +6,7 @@ from app.notifications.telegram import (
     TelegramNotifier,
     build_release_import_message,
 )
-from app.services.ingest import build_release, generate_summary
+from app.services.ingest import build_release, generate_fallback_item_description, generate_summary
 from app.services.openai_generation import OpenAIReleaseCopyGenerator
 from app.storage import get_release, list_items, replace_release_items, upsert_release
 
@@ -75,13 +75,19 @@ def _item_signature(item) -> tuple:
 
 def _fallback_description_for_item(item) -> str:
     if item.type.value == "new_feature":
-        return (
-            f'В модуле {item.module} добавили новое улучшение вокруг сценария "{item.title}", '
-            "чтобы пользователям было проще выполнять ежедневные операции и быстрее проходить рабочие шаги."
+        return generate_fallback_item_description(
+            item.type,
+            item.module,
+            item.title,
+            item.category,
+            [],
         )
     if item.type.value == "change":
-        return (
-            f'В модуле {item.module} обновили сценарий "{item.title}", чтобы сделать поведение системы понятнее '
-            "и сократить лишние действия в ежедневной работе."
+        return generate_fallback_item_description(
+            item.type,
+            item.module,
+            item.title,
+            item.category,
+            [],
         )
     return item.description

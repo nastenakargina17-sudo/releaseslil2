@@ -89,11 +89,12 @@ class IngestAIGenerationTests(unittest.TestCase):
             copy_generator=FakeCopyGenerator(should_fail=True),
         )
 
-        self.assertIn("В этом релизе сфокусировались", release.summary)
+        self.assertIn("Основные изменения сосредоточены", release.summary)
         described_items = [item for item in items if item.type in {ItemType.NEW_FEATURE, ItemType.CHANGE}]
         self.assertTrue(described_items)
         self.assertTrue(all(item.description for item in described_items))
         self.assertTrue(all("Сгенерированное описание" not in item.description for item in described_items))
+        self.assertTrue(all("сократить лишние действия в ежедневной работе" not in item.description.lower() for item in described_items))
 
     def test_item_descriptions_can_still_be_generated_when_summary_fails(self) -> None:
         release, items = build_release(
@@ -103,9 +104,23 @@ class IngestAIGenerationTests(unittest.TestCase):
             copy_generator=SummaryOnlyFailingGenerator(),
         )
 
-        self.assertIn("В этом релизе сфокусировались", release.summary)
+        self.assertIn("Основные изменения сосредоточены", release.summary)
         described_items = [item for item in items if item.type in {ItemType.NEW_FEATURE, ItemType.CHANGE}]
         self.assertTrue(all(item.description.startswith("Сгенерированное описание") for item in described_items))
+
+    def test_fallback_item_description_uses_source_text_instead_of_old_template(self) -> None:
+        release, items = build_release(
+            _sample_source_items(),
+            release_id="2026-05",
+            release_date="2026-05-31",
+        )
+
+        feature = next(item for item in items if item.type == ItemType.NEW_FEATURE)
+        change = next(item for item in items if item.type == ItemType.CHANGE)
+        self.assertIn("Появилась возможность", feature.description)
+        self.assertIn("Обновили", change.description)
+        self.assertNotIn("в ежедневной работе", feature.description.lower())
+        self.assertNotIn("вокруг сценария", change.description.lower())
 
     def test_release_candidates_do_not_get_auto_descriptions(self) -> None:
         release, items = build_release(
