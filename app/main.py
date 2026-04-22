@@ -45,6 +45,7 @@ from app.review_utils import (
     DESCRIPTIONLESS_ITEM_TYPES,
     ITEM_TYPE_LABELS,
     STATUS_LABELS,
+    default_item_category,
     digest_blockers,
 )
 from app.services.ingest import build_release
@@ -283,6 +284,8 @@ def review_release(request: Request, release_id: str) -> HTMLResponse:
     if release is None:
         raise HTTPException(status_code=404, detail="Release not found")
     items = list_items(release_id)
+    primary_items = [item for item in items if item.type != ItemType.RELEASE_CANDIDATE]
+    candidate_items = [item for item in items if item.type == ItemType.RELEASE_CANDIDATE]
     flash = request.query_params.get("flash")
     digest_ready = release_is_ready_for_digest(release, items)
     return templates.TemplateResponse(
@@ -291,6 +294,8 @@ def review_release(request: Request, release_id: str) -> HTMLResponse:
         {
             "release": release,
             "items": items,
+            "primary_items": primary_items,
+            "candidate_items": candidate_items,
             "statuses": list(ItemStatus),
             "summary_statuses": list(SummaryStatus),
             "categories": list(ValueCategory),
@@ -344,15 +349,38 @@ def update_review_item(
     status: str = Form(...),
     is_paid_feature: Optional[str] = Form(None),
     exclude_from_release: Optional[str] = Form(None),
+    release_candidate_action: Optional[str] = Form(None),
 ) -> Response:
+    item = get_item(item_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Digest item not found")
+
     effective_status = ItemStatus.EXCLUDED.value if exclude_from_release == "on" else status
+    effective_type = item.type
+    effective_category = category or None
+    effective_description = description
+    moved_to_primary = False
+
+    if item.type == ItemType.RELEASE_CANDIDATE:
+        if release_candidate_action in {ItemType.NEW_FEATURE.value, ItemType.CHANGE.value}:
+            effective_type = ItemType(release_candidate_action)
+            effective_status = ItemStatus.DRAFT.value
+            effective_category = default_item_category(effective_type).value if default_item_category(effective_type) else None
+            effective_description = ""
+            moved_to_primary = True
+        else:
+            effective_status = ItemStatus.APPROVED.value
+            effective_category = None
+            effective_description = ""
+
     update_item(
         item_id=item_id,
         title=title,
-        description=description,
-        category=category or None,
+        description=effective_description,
+        category=effective_category,
         status=effective_status,
         is_paid_feature=is_paid_feature == "on",
+        item_type=effective_type.value,
     )
     if _wants_json(request):
         return JSONResponse(
@@ -361,6 +389,8 @@ def update_review_item(
                 "message": "Пункт успешно сохранен.",
                 "item_id": item_id,
                 "status": effective_status,
+                "item_type": effective_type.value,
+                "reload": moved_to_primary,
             }
         )
     return RedirectResponse(url=f"/review/{release_id}", status_code=303)

@@ -153,15 +153,17 @@ def update_item(
     category: Optional[str],
     status: str,
     is_paid_feature: bool,
+    item_type: Optional[str] = None,
 ) -> None:
     with connect() as conn:
         conn.execute(
             """
             UPDATE digest_items
-            SET title = ?, description = ?, category = ?, status = ?, is_paid_feature = ?
+            SET title = ?, description = ?, category = ?, status = ?, is_paid_feature = ?,
+                type = COALESCE(?, type)
             WHERE id = ?
             """,
-            (title, description, category, status, 1 if is_paid_feature else 0, item_id),
+            (title, description, category, status, 1 if is_paid_feature else 0, item_type, item_id),
         )
 
 

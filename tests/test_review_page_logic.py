@@ -75,6 +75,20 @@ class ReviewPageLogicTests(unittest.TestCase):
         self.assertEqual(items[0].title, "Исправить ошибку")
         self.assertEqual(items[1].title, "Техническая доработка")
 
+    def test_story_with_no_release_description_becomes_release_candidate(self) -> None:
+        from app.clients.tracker import _classify_item_type
+
+        item_type = _classify_item_type(
+            {
+                "type": {"key": "story"},
+                "tags": [],
+                "inTheReleaseDescription": "Нет",
+                "project": {"primary": {"display": "Product Development"}},
+            }
+        )
+
+        self.assertEqual(item_type, ItemType.RELEASE_CANDIDATE)
+
 
 class DigestGuardTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -128,6 +142,19 @@ class DigestGuardTests(unittest.TestCase):
                     status=ItemStatus.DRAFT,
                     tracker_urls=["https://tracker.yandex.ru/DEV-1"],
                     grouping_mode=GroupingMode.SINGLE_TASK,
+                ),
+                DigestItem(
+                    id="item-2",
+                    release_id="2026-04",
+                    source_item_ids=["DEV-2"],
+                    title="Candidate title",
+                    description="",
+                    module="Core",
+                    type=ItemType.RELEASE_CANDIDATE,
+                    category=None,
+                    status=ItemStatus.APPROVED,
+                    tracker_urls=["https://tracker.yandex.ru/DEV-2"],
+                    grouping_mode=GroupingMode.SINGLE_TASK,
                 )
             ],
         )
@@ -152,12 +179,29 @@ class DigestGuardTests(unittest.TestCase):
         self.assertIn("Сохранить изменения", response.text)
         self.assertIn("Исключить из релиза", response.text)
         self.assertIn("Категория ценности", response.text)
+        self.assertIn('Кандидаты из "Нет"', response.text)
 
     def test_digest_route_rejects_non_final_items(self) -> None:
         response = self.client.get("/digest/2026-04")
 
         self.assertEqual(response.status_code, 400)
         self.assertIn("Не все задачи находятся в статусе подтверждения", response.text)
+
+    def test_release_candidate_does_not_block_digest_when_main_items_are_final(self) -> None:
+        self.storage.update_item(
+            item_id="item-1",
+            title="Feature title",
+            description="Feature description",
+            category=None,
+            status=ItemStatus.APPROVED.value,
+            is_paid_feature=False,
+        )
+
+        response = self.client.get("/digest/2026-04")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Feature title", response.text)
+        self.assertNotIn("Candidate title", response.text)
 
     def test_item_save_supports_ajax_without_redirect(self) -> None:
         response = self.client.post(
@@ -175,6 +219,26 @@ class DigestGuardTests(unittest.TestCase):
         self.assertEqual(response.json()["ok"], True)
         self.assertEqual(self.storage.get_item("item-1").title, "Updated title")
         self.assertEqual(self.storage.get_item("item-1").status, ItemStatus.APPROVED)
+
+    def test_release_candidate_can_be_promoted_to_main_release_list(self) -> None:
+        response = self.client.post(
+            "/review/2026-04/items/item-2",
+            data={
+                "title": "Candidate title",
+                "description": "",
+                "category": "",
+                "status": "approved",
+                "release_candidate_action": "change",
+            },
+            headers={"X-Requested-With": "XMLHttpRequest"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["reload"], True)
+        item = self.storage.get_item("item-2")
+        self.assertEqual(item.type, ItemType.CHANGE)
+        self.assertEqual(item.status, ItemStatus.DRAFT)
+        self.assertEqual(item.description, "")
 
     def test_upload_validates_media_type_and_size(self) -> None:
         response = self.client.post(

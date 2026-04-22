@@ -8,6 +8,7 @@ class ItemType(str, Enum):
     CHANGE = "change"
     BUGFIX = "bugfix"
     TECHNICAL_IMPROVEMENT = "technical_improvement"
+    RELEASE_CANDIDATE = "release_candidate"
 
 
 class ItemStatus(str, Enum):
@@ -72,4 +73,3 @@ class DigestRelease:
     release_date: str
     summary: str
     summary_status: SummaryStatus = SummaryStatus.DRAFT
-

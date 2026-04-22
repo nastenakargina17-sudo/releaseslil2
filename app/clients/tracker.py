@@ -156,6 +156,8 @@ def _classify_item_type(item: dict[str, Any]) -> Optional[ItemType]:
             return ItemType.NEW_FEATURE
         if in_release == "Только внутренний":
             return ItemType.CHANGE
+        if in_release == "Нет":
+            return ItemType.RELEASE_CANDIDATE
 
     return None
 

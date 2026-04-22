@@ -260,7 +260,16 @@ class OpenAIReleaseCopyGenerator:
 
 
 def _build_summary_stats(items: Iterable[DigestItem]) -> dict:
-    ordered_items = list(items)
+    ordered_items = [
+        item
+        for item in items
+        if item.type in {
+            ItemType.NEW_FEATURE,
+            ItemType.CHANGE,
+            ItemType.TECHNICAL_IMPROVEMENT,
+            ItemType.BUGFIX,
+        }
+    ]
     type_counts = Counter(item.type.value for item in ordered_items)
     module_counts = Counter(item.module for item in ordered_items)
     new_feature_module_counts = Counter(

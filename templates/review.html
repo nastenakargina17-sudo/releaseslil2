@@ -655,6 +655,7 @@
         <span class="filter-label">Быстрый фильтр:</span>
         <button type="button" class="button button-subtle button-filter is-active" data-filter-value="all">Все пункты</button>
         <button type="button" class="button button-subtle button-filter" data-filter-value="needs_review">Требуют ревью</button>
+        <button type="button" class="button button-subtle button-filter" data-filter-value="release_candidate">Кандидаты из "Нет"</button>
         <button type="button" class="button button-subtle button-filter" data-filter-value="draft">Черновики</button>
         <button type="button" class="button button-subtle button-filter" data-filter-value="reviewed">На проверке</button>
         <button type="button" class="button button-subtle button-filter" data-filter-value="approved">Подтверждено</button>
@@ -707,7 +708,16 @@
       </section>
 
       <div class="stack">
-        {% for item in items %}
+        {% if primary_items %}
+          <section class="stack">
+            <div class="section-head">
+              <div class="section-copy">
+                <h2>Основной список релизных пунктов</h2>
+                <p>Здесь остаются обычные пункты релиз-ноутс: их можно редактировать, описывать, отмечать как платные и дополнять вложениями.</p>
+              </div>
+              <span class="mini-pill">Пунктов: {{ primary_items|length }}</span>
+            </div>
+            {% for item in primary_items %}
           {% set is_descriptionless = item.type.value in descriptionless_item_types %}
           {% set is_excluded = item.status.value == excluded_status %}
           <article
@@ -717,6 +727,7 @@
             data-item-id="{{ item.id }}"
             data-item-status="{{ item.status.value }}"
             data-item-type="{{ item.type.value }}"
+            data-item-bucket="primary"
           >
             <div class="section-head">
               <div class="section-copy">
@@ -858,7 +869,81 @@
               <div class="image-gallery" data-media-gallery hidden></div>
             {% endif %}
           </article>
-        {% endfor %}
+            {% endfor %}
+          </section>
+        {% endif %}
+
+        {% if candidate_items %}
+          <section class="stack">
+            <div class="section-head">
+              <div class="section-copy">
+                <h2>Отдельный список кандидатов из "Нет"</h2>
+                <p>Эти задачи пришли из трекера со значением <strong>inTheReleaseDescription = "Нет"</strong>. Мы не генерируем им описание автоматически и не включаем в релиз, пока ревьюер явно не примет решение.</p>
+              </div>
+              <span class="mini-pill">Кандидатов: {{ candidate_items|length }}</span>
+            </div>
+            {% for item in candidate_items %}
+              <article
+                class="item-card"
+                id="item-card-{{ item.id }}"
+                data-item-card
+                data-item-id="{{ item.id }}"
+                data-item-status="{{ item.status.value }}"
+                data-item-type="{{ item.type.value }}"
+                data-item-bucket="candidate"
+              >
+                <div class="section-head">
+                  <div class="section-copy">
+                    <div class="meta-grid">
+                      <span class="item-pill">{{ item_type_labels[item.type] }}</span>
+                      <span class="mini-pill">Модуль: {{ item.module }}</span>
+                      <span class="mini-pill">В трекере было отмечено "Нет"</span>
+                    </div>
+                    <h2>{{ item.title }}</h2>
+                    <p>Ревьюер может оставить задачу вне релиза или перевести её в общий список как новую фичу либо изменение. После перевода задача начнёт жить по обычным правилам релиз-ноутс.</p>
+                  </div>
+                  <span class="status-pill status-{{ item.status.value }}" data-status-pill>Вне релиза</span>
+                </div>
+
+                <form method="post" action="/review/{{ release.id }}/items/{{ item.id }}" class="grid" data-review-form data-item-form>
+                  <div class="field-group">
+                    <label for="title-{{ item.id }}">Заголовок</label>
+                    <input type="text" name="title" id="title-{{ item.id }}" value="{{ item.title }}">
+                    <div class="helper-text">Модуль и связь с исходной задачей сохраняются. На этом шаге нужно только решить, переводим ли пункт в релиз.</div>
+                  </div>
+
+                  <input type="hidden" name="description" value="">
+                  <input type="hidden" name="category" value="">
+                  <input type="hidden" name="status" value="{{ approved_status }}">
+
+                  <div class="field-row">
+                    <div class="field-group">
+                      <label for="release_candidate_action-{{ item.id }}">Решение по задаче</label>
+                      <select name="release_candidate_action" id="release_candidate_action-{{ item.id }}">
+                        <option value="">Оставить вне релиза</option>
+                        <option value="new_feature">Включить в релиз как новую фичу</option>
+                        <option value="change">Включить в релиз как изменение</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div class="source-links">
+                    <strong>Источники:</strong>
+                    {% for url in item.tracker_urls %}
+                      <a href="{{ url }}" class="source-link" target="_blank" rel="noreferrer">
+                        {{ item.source_item_ids[loop.index0] if loop.index0 < item.source_item_ids|length else ('Задача ' ~ loop.index) }}
+                      </a>
+                    {% endfor %}
+                  </div>
+
+                  <div>
+                    <button type="submit" class="button button-save" data-save-button disabled>Сохранить решение</button>
+                  </div>
+                </form>
+              </article>
+            {% endfor %}
+          </section>
+        {% endif %}
       </div>
     </div>
   </div>
@@ -916,10 +1001,13 @@
         const currentFilter = activeFilter();
         itemCards.forEach((card) => {
           const status = getCardStatus(card);
+          const bucket = card.dataset.itemBucket || "primary";
+          const itemType = card.dataset.itemType || "";
           const shouldShow =
             currentFilter === "all"
+            || (currentFilter === "release_candidate" && itemType === "release_candidate")
             || (currentFilter === "needs_review" && status !== "{{ approved_status }}" && status !== "{{ excluded_status }}")
-            || currentFilter === status;
+            || (bucket === "primary" && currentFilter === status);
           card.hidden = !shouldShow;
         });
       };
@@ -1201,6 +1289,10 @@
               method: "POST",
               body: formData,
             });
+            if (payload.reload) {
+              window.location.reload();
+              return;
+            }
             setFormDefaults(form);
             markDirtyState(form);
             showToast(payload.message || "Изменения сохранены.");

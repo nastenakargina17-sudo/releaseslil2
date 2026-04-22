@@ -11,7 +11,7 @@ from app.models import (
     SummaryStatus,
     ValueCategory,
 )
-from app.review_utils import default_item_status, sanitize_digest_title, should_collect_description
+from app.review_utils import default_item_category, default_item_status, sanitize_digest_title, should_collect_description
 from app.services.openai_generation import OpenAIGenerationError, OpenAIReleaseCopyGenerator
 
 
@@ -57,9 +57,13 @@ def build_release(
 
 
 def generate_summary(items: List[DigestItem]) -> str:
-    new_features = sum(1 for item in items if item.type == ItemType.NEW_FEATURE)
-    changes = sum(1 for item in items if item.type == ItemType.CHANGE)
-    modules = sorted({item.module for item in items})
+    release_items = [
+        item for item in items
+        if item.type in {ItemType.NEW_FEATURE, ItemType.CHANGE, ItemType.BUGFIX, ItemType.TECHNICAL_IMPROVEMENT}
+    ]
+    new_features = sum(1 for item in release_items if item.type == ItemType.NEW_FEATURE)
+    changes = sum(1 for item in release_items if item.type == ItemType.CHANGE)
+    modules = sorted({item.module for item in release_items})
     modules_text = ", ".join(modules[:3]) if modules else "ключевых модулях"
     return (
         f"В этом релизе сфокусировались на развитии модулей {modules_text}: "
@@ -73,7 +77,7 @@ def _build_epic_digest_item(release_id: str, epic_id: str, epic_items: List[Sour
     item_type = primary.type
     title = sanitize_digest_title(primary.parent_epic_title or primary.title)
     description = _narrative_for_feature_or_change(item_type, primary.module, title)
-    category = _default_category(item_type)
+    category = default_item_category(item_type)
     return DigestItem(
         id=f"digest-{uuid4().hex[:10]}",
         release_id=release_id,
@@ -92,10 +96,9 @@ def _build_epic_digest_item(release_id: str, epic_id: str, epic_items: List[Sour
 def _build_single_digest_item(release_id: str, source_item: SourceItem) -> DigestItem:
     title = sanitize_digest_title(source_item.title)
     description = ""
-    category = None
+    category = default_item_category(source_item.type)
     if should_collect_description(source_item.type):
         description = _narrative_for_feature_or_change(source_item.type, source_item.module, title)
-        category = _default_category(source_item.type)
     return DigestItem(
         id=f"digest-{uuid4().hex[:10]}",
         release_id=release_id,
@@ -121,14 +124,6 @@ def _narrative_for_feature_or_change(item_type: ItemType, module: str, title: st
         f"В модуле {module} обновили сценарий \"{title}\", чтобы сделать поведение системы понятнее "
         "и сократить лишние действия в ежедневной работе."
     )
-
-
-def _default_category(item_type: ItemType) -> ValueCategory:
-    if item_type == ItemType.NEW_FEATURE:
-        return ValueCategory.DAILY_WORK_CONVENIENCE
-    return ValueCategory.CLARITY_TRANSPARENCY
-
-
 def _enrich_release_with_ai_copy(
     copy_generator: OpenAIReleaseCopyGenerator,
     release: DigestRelease,

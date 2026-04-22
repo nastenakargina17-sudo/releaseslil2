@@ -1,5 +1,5 @@
 import re
-from typing import Iterable
+from typing import Iterable, Optional
 
 from app.models import DigestItem, DigestRelease, ItemStatus, ItemType, SummaryStatus, ValueCategory
 
@@ -28,9 +28,14 @@ ITEM_TYPE_LABELS = {
     ItemType.CHANGE: "Изменение",
     ItemType.BUGFIX: "Багфикс",
     ItemType.TECHNICAL_IMPROVEMENT: "Техническая доработка",
+    ItemType.RELEASE_CANDIDATE: "Кандидат из \"Нет\"",
 }
 
-DESCRIPTIONLESS_ITEM_TYPES = {ItemType.BUGFIX, ItemType.TECHNICAL_IMPROVEMENT}
+DESCRIPTIONLESS_ITEM_TYPES = {
+    ItemType.BUGFIX,
+    ItemType.TECHNICAL_IMPROVEMENT,
+    ItemType.RELEASE_CANDIDATE,
+}
 TRACKER_TITLE_PREFIX_RE = re.compile(r"^[A-Z][A-Z0-9_]*-\d+\s*[:\-–]?\s*")
 
 
@@ -52,6 +57,14 @@ def default_item_status(item_type: ItemType) -> ItemStatus:
     return ItemStatus.DRAFT
 
 
+def default_item_category(item_type: ItemType) -> Optional[ValueCategory]:
+    if item_type == ItemType.NEW_FEATURE:
+        return ValueCategory.DAILY_WORK_CONVENIENCE
+    if item_type == ItemType.CHANGE:
+        return ValueCategory.CLARITY_TRANSPARENCY
+    return None
+
+
 def should_collect_description(item_type: ItemType) -> bool:
     return item_type not in DESCRIPTIONLESS_ITEM_TYPES
 
@@ -61,6 +74,8 @@ def digest_blockers(release: DigestRelease, items: Iterable[DigestItem]) -> list
     if release.summary_status != SummaryStatus.APPROVED:
         blockers.append("Summary не подтвержден")
     for item in items:
+        if item.type == ItemType.RELEASE_CANDIDATE:
+            continue
         if item.status not in {ItemStatus.APPROVED, ItemStatus.EXCLUDED}:
             blockers.append(item.id)
     return blockers

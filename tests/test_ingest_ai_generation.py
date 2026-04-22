@@ -107,6 +107,18 @@ class IngestAIGenerationTests(unittest.TestCase):
         described_items = [item for item in items if item.type in {ItemType.NEW_FEATURE, ItemType.CHANGE}]
         self.assertTrue(all(item.description.startswith("Сгенерированное описание") for item in described_items))
 
+    def test_release_candidates_do_not_get_auto_descriptions(self) -> None:
+        release, items = build_release(
+            _sample_source_items(include_candidate=True),
+            release_id="2026-05",
+            release_date="2026-05-31",
+            copy_generator=FakeCopyGenerator(),
+        )
+
+        candidate = next(item for item in items if item.type == ItemType.RELEASE_CANDIDATE)
+        self.assertEqual(candidate.description, "")
+        self.assertNotIn("Кандидаты", release.summary)
+
     def test_summary_prompt_requests_non_log_style(self) -> None:
         release, _ = build_release(
             _sample_source_items(),
@@ -228,8 +240,8 @@ class IngestAIGenerationTests(unittest.TestCase):
         self.assertTrue(item_issues)
 
 
-def _sample_source_items():
-    return [
+def _sample_source_items(include_candidate: bool = False):
+    items = [
         SourceItem(
             id="REL-1",
             url="https://tracker.yandex.ru/REL-1",
@@ -255,6 +267,18 @@ def _sample_source_items():
             type=ItemType.BUGFIX,
         ),
     ]
+    if include_candidate:
+        items.append(
+            SourceItem(
+                id="REL-4",
+                url="https://tracker.yandex.ru/REL-4",
+                title="Скрытая задача для ревью",
+                description="Пока не решили, выносить ли в релиз.",
+                module="Релизы",
+                type=ItemType.RELEASE_CANDIDATE,
+            )
+        )
+    return items
 
 
 if __name__ == "__main__":

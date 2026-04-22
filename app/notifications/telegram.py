@@ -187,4 +187,8 @@ def build_digest_ready_message(
 def release_is_ready_for_digest(release: DigestRelease, items: list[DigestItem]) -> bool:
     if release.summary_status != SummaryStatus.APPROVED:
         return False
-    return all(item.status in {ItemStatus.APPROVED, ItemStatus.EXCLUDED} for item in items)
+    return all(
+        item.type == ItemType.RELEASE_CANDIDATE
+        or item.status in {ItemStatus.APPROVED, ItemStatus.EXCLUDED}
+        for item in items
+    )
