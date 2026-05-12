@@ -297,6 +297,89 @@ class DigestGuardTests(unittest.TestCase):
         self.assertIn("Approved fix", response.text)
         self.assertNotIn("Excluded feature", response.text)
 
+    def test_digest_hides_tracker_links_for_product_items_but_shows_support_links(self) -> None:
+        self.storage.replace_release_items(
+            "2026-04",
+            [
+                DigestItem(
+                    id="feature-approved",
+                    release_id="2026-04",
+                    source_item_ids=["DEV-20"],
+                    title="New analytics",
+                    description="Teams can understand progress faster.",
+                    module="Аналитика",
+                    type=ItemType.NEW_FEATURE,
+                    category=ValueCategory.CLARITY_TRANSPARENCY,
+                    status=ItemStatus.APPROVED,
+                    tracker_urls=["https://tracker.yandex.ru/DEV-20"],
+                    grouping_mode=GroupingMode.SINGLE_TASK,
+                ),
+                DigestItem(
+                    id="bugfix-approved",
+                    release_id="2026-04",
+                    source_item_ids=["DEV-21"],
+                    title="Fixed export",
+                    description="",
+                    module="Экспорт",
+                    type=ItemType.BUGFIX,
+                    category=None,
+                    status=ItemStatus.APPROVED,
+                    tracker_urls=["https://tracker.yandex.ru/DEV-21"],
+                    grouping_mode=GroupingMode.SINGLE_TASK,
+                ),
+            ],
+        )
+
+        response = self.client.get("/digest/2026-04")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("New analytics", response.text)
+        self.assertNotIn("https://tracker.yandex.ru/DEV-20", response.text)
+        self.assertIn("https://tracker.yandex.ru/DEV-21", response.text)
+
+    def test_digest_renders_value_badge_and_paid_feature_badge(self) -> None:
+        self.storage.update_item(
+            item_id="item-1",
+            title="Feature title",
+            description="Feature description",
+            category=ValueCategory.TIME_SAVING.value,
+            status=ItemStatus.APPROVED.value,
+            is_paid_feature=True,
+        )
+
+        response = self.client.get("/digest/2026-04")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Экономия времени", response.text)
+        self.assertIn("Платная функция", response.text)
+
+    def test_digest_support_section_is_collapsed_by_default(self) -> None:
+        self.storage.replace_release_items(
+            "2026-04",
+            [
+                DigestItem(
+                    id="bugfix-approved",
+                    release_id="2026-04",
+                    source_item_ids=["DEV-30"],
+                    title="Fixed notification",
+                    description="",
+                    module="Уведомления",
+                    type=ItemType.BUGFIX,
+                    category=None,
+                    status=ItemStatus.APPROVED,
+                    tracker_urls=["https://tracker.yandex.ru/DEV-30"],
+                    grouping_mode=GroupingMode.SINGLE_TASK,
+                ),
+            ],
+        )
+
+        response = self.client.get("/digest/2026-04")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("<details", response.text)
+        self.assertIn("Исправления и технические улучшения", response.text)
+        self.assertNotIn("<details open", response.text)
+
     def test_item_save_supports_ajax_without_redirect(self) -> None:
         item = self.storage.get_item("item-1")
         response = self.client.post(
