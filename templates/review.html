@@ -248,6 +248,12 @@
       box-shadow: 0 20px 48px rgba(255, 200, 4, 0.18);
     }
 
+    .item-card.is-locked-by-other,
+    .summary-card.is-locked-by-other {
+      border-color: rgba(21, 51, 92, 0.42);
+      box-shadow: 0 20px 48px rgba(21, 51, 92, 0.14);
+    }
+
     .section-head {
       display: flex;
       justify-content: space-between;
@@ -585,6 +591,34 @@
       line-height: 1.45;
     }
 
+    .lock-banner {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 14px;
+      border-radius: var(--radius-md);
+      border: 1px solid rgba(21, 51, 92, 0.18);
+      background: rgba(21, 51, 92, 0.07);
+      color: var(--navy-bright);
+      font-size: 14px;
+      line-height: 1.35;
+    }
+
+    .lock-banner[hidden] {
+      display: none;
+    }
+
+    .lock-banner strong {
+      color: var(--navy);
+    }
+
+    .lock-banner .button {
+      flex: 0 0 auto;
+      padding: 9px 12px;
+      font-size: 13px;
+    }
+
     @media (max-width: 760px) {
       .page { width: min(100% - 20px, 1180px); margin-top: 12px; }
       .hero,
@@ -684,7 +718,20 @@
           <span class="status-pill status-{{ release.summary_status.value }}">{{ status_labels[release.summary_status] }}</span>
         </div>
 
-        <form method="post" action="/review/{{ release.id }}/summary" class="grid" data-review-form data-form-kind="summary">
+        <form
+          method="post"
+          action="/review/{{ release.id }}/summary"
+          class="grid"
+          data-review-form
+          data-form-kind="summary"
+          data-lock-object-type="summary"
+          data-lock-object-id="{{ release.id }}"
+        >
+          <input type="hidden" name="object_version" value="{{ release.version }}" data-object-version>
+          <div class="lock-banner" data-lock-banner hidden>
+            <span data-lock-message></span>
+            <button type="button" class="button button-subtle" data-lock-takeover>Редактировать всё равно</button>
+          </div>
           <div class="field-group">
             <label for="summary">Текст summary</label>
             <textarea name="summary" id="summary">{{ release.summary }}</textarea>
@@ -755,7 +802,20 @@
               <span class="status-pill status-{{ item.status.value }}" data-status-pill>{{ status_labels[item.status] }}</span>
             </div>
 
-            <form method="post" action="/review/{{ release.id }}/items/{{ item.id }}" class="grid" data-review-form data-item-form>
+            <form
+              method="post"
+              action="/review/{{ release.id }}/items/{{ item.id }}"
+              class="grid"
+              data-review-form
+              data-item-form
+              data-lock-object-type="item"
+              data-lock-object-id="{{ item.id }}"
+            >
+              <input type="hidden" name="object_version" value="{{ item.version }}" data-object-version>
+              <div class="lock-banner" data-lock-banner hidden>
+                <span data-lock-message></span>
+                <button type="button" class="button button-subtle" data-lock-takeover>Редактировать всё равно</button>
+              </div>
               <div class="field-group">
                 <label for="title-{{ item.id }}">Заголовок</label>
                 <input type="text" name="title" id="title-{{ item.id }}" value="{{ item.title }}">
@@ -905,7 +965,20 @@
                   <span class="status-pill status-{{ item.status.value }}" data-status-pill>Вне релиза</span>
                 </div>
 
-                <form method="post" action="/review/{{ release.id }}/items/{{ item.id }}" class="grid" data-review-form data-item-form>
+                <form
+                  method="post"
+                  action="/review/{{ release.id }}/items/{{ item.id }}"
+                  class="grid"
+                  data-review-form
+                  data-item-form
+                  data-lock-object-type="item"
+                  data-lock-object-id="{{ item.id }}"
+                >
+                  <input type="hidden" name="object_version" value="{{ item.version }}" data-object-version>
+                  <div class="lock-banner" data-lock-banner hidden>
+                    <span data-lock-message></span>
+                    <button type="button" class="button button-subtle" data-lock-takeover>Редактировать всё равно</button>
+                  </div>
                   <div class="field-group">
                     <label for="title-{{ item.id }}">Заголовок</label>
                     <input type="text" name="title" id="title-{{ item.id }}" value="{{ item.title }}">
@@ -957,6 +1030,8 @@
       const toastStack = document.getElementById("toast-stack");
       const filterButtons = Array.from(document.querySelectorAll("[data-filter-value]"));
       const itemCards = Array.from(document.querySelectorAll("[data-item-card]"));
+      const reviewForms = Array.from(document.querySelectorAll("[data-review-form]"));
+      const lockClaims = new Map();
       const uploadLimits = {
         image: {{ media_limits.image_mb }} * 1024 * 1024,
         gif: {{ media_limits.gif_mb }} * 1024 * 1024,
@@ -1184,9 +1259,126 @@
         }
 
         if (!response.ok) {
-          throw new Error(payload.detail || payload.message || "Не удалось выполнить действие.");
+          const error = new Error(payload.detail || payload.message || "Не удалось выполнить действие.");
+          error.status = response.status;
+          error.payload = payload;
+          throw error;
         }
         return payload;
+      };
+
+      const lockKeyForForm = (form) => `${form.dataset.lockObjectType}:${form.dataset.lockObjectId}`;
+
+      const findLockForm = (objectType, objectId) => reviewForms.find((form) => (
+        form.dataset.lockObjectType === objectType && form.dataset.lockObjectId === objectId
+      ));
+
+      const setLockState = (form, lock) => {
+        const banner = form.querySelector("[data-lock-banner]");
+        const message = form.querySelector("[data-lock-message]");
+        const card = form.closest("[data-item-card], [data-summary-card]");
+        if (!banner || !message || !card) {
+          return;
+        }
+
+        if (!lock || lock.is_mine) {
+          banner.hidden = true;
+          card.classList.remove("is-locked-by-other");
+          return;
+        }
+
+        message.textContent = "";
+        const prefix = document.createTextNode("Сейчас редактирует ");
+        const owner = document.createElement("strong");
+        owner.textContent = lock.owner_name;
+        const suffix = document.createTextNode(". Можно читать, а для правки заберите карточку себе.");
+        message.append(prefix, owner, suffix);
+        banner.hidden = false;
+        card.classList.add("is-locked-by-other");
+      };
+
+      const refreshLocks = async () => {
+        try {
+          const payload = await fetchJson("/review/{{ release.id }}/locks");
+          const locks = payload.locks || [];
+          const activeKeys = new Set();
+          locks.forEach((lock) => {
+            activeKeys.add(`${lock.object_type}:${lock.object_id}`);
+            const form = findLockForm(lock.object_type, lock.object_id);
+            if (form) {
+              setLockState(form, lock);
+            }
+          });
+          reviewForms.forEach((form) => {
+            if (!activeKeys.has(lockKeyForForm(form))) {
+              setLockState(form, null);
+            }
+          });
+        } catch (error) {
+          showToast(error.message, "error");
+        }
+      };
+
+      const claimLock = async (form, force = false) => {
+        const objectType = form.dataset.lockObjectType;
+        const objectId = form.dataset.lockObjectId;
+        if (!objectType || !objectId) {
+          return false;
+        }
+
+        const key = lockKeyForForm(form);
+        const now = Date.now();
+        if (!force && lockClaims.has(key) && now - lockClaims.get(key) < 30000) {
+          return true;
+        }
+
+        const formData = new FormData();
+        formData.set("object_type", objectType);
+        formData.set("object_id", objectId);
+        if (force) {
+          formData.set("force", "true");
+        }
+
+        try {
+          const payload = await fetchJson("/review/{{ release.id }}/locks", {
+            method: "POST",
+            body: formData,
+          });
+          lockClaims.set(key, now);
+          setLockState(form, payload.lock);
+          if (force) {
+            showToast("Карточка теперь закреплена за вами.");
+          }
+          return true;
+        } catch (error) {
+          if (error.status === 409 && error.payload?.lock) {
+            setLockState(form, error.payload.lock);
+            return false;
+          }
+          showToast(error.message, "error");
+          return false;
+        }
+      };
+
+      const releaseLock = async (form) => {
+        const objectType = form.dataset.lockObjectType;
+        const objectId = form.dataset.lockObjectId;
+        if (!objectType || !objectId) {
+          return;
+        }
+
+        const formData = new FormData();
+        formData.set("object_type", objectType);
+        formData.set("object_id", objectId);
+        try {
+          await fetchJson("/review/{{ release.id }}/locks/release", {
+            method: "POST",
+            body: formData,
+          });
+          lockClaims.delete(lockKeyForForm(form));
+        } catch (error) {
+          // Lock release is best-effort; TTL will clean up closed or interrupted tabs.
+        }
       };
 
       const convertImageToWebp = (file) => new Promise((resolve) => {
@@ -1257,14 +1449,20 @@
         return file;
       };
 
-      document.querySelectorAll("[data-review-form]").forEach((form) => {
+      reviewForms.forEach((form) => {
+        form.addEventListener("focusin", () => {
+          claimLock(form);
+        });
+
         form.addEventListener("input", () => {
+          claimLock(form);
           updateCardStatus(form);
           updateSummaryStatus(form);
           markDirtyState(form);
         });
 
         form.addEventListener("change", () => {
+          claimLock(form);
           updateExcludedState(form);
           updateCardStatus(form);
           updateSummaryStatus(form);
@@ -1293,15 +1491,30 @@
               window.location.reload();
               return;
             }
+            const versionInput = form.querySelector("[data-object-version]");
+            if (versionInput && payload.version) {
+              versionInput.value = payload.version;
+            }
             setFormDefaults(form);
             markDirtyState(form);
+            releaseLock(form);
             showToast(payload.message || "Изменения сохранены.");
           } catch (error) {
             markDirtyState(form);
             showToast(error.message, "error");
           }
         });
+
+        const takeoverButton = form.querySelector("[data-lock-takeover]");
+        if (takeoverButton) {
+          takeoverButton.addEventListener("click", () => {
+            claimLock(form, true);
+          });
+        }
       });
+
+      refreshLocks();
+      window.setInterval(refreshLocks, 12000);
 
       document.querySelectorAll(".upload-row").forEach((form) => {
         form.addEventListener("submit", async (event) => {

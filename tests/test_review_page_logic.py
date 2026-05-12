@@ -98,7 +98,7 @@ class DigestGuardTests(unittest.TestCase):
         os.environ["YANDEX_CLIENT_ID"] = "test-client-id"
         os.environ["YANDEX_CLIENT_SECRET"] = "test-client-secret"
         os.environ["YANDEX_REDIRECT_URI"] = "http://testserver/auth/yandex/callback"
-        os.environ["YANDEX_ALLOWED_EMAILS"] = "employee@example.com"
+        os.environ["YANDEX_ALLOWED_EMAILS"] = "employee@example.com,other@example.com"
 
         import app.config
         import app.storage
@@ -159,13 +159,16 @@ class DigestGuardTests(unittest.TestCase):
             ],
         )
         self.client = TestClient(self.main.app)
+        self._authenticate_client(self.client, "employee@example.com", "Employee")
+
+    def _authenticate_client(self, client: TestClient, email: str, name: str) -> None:
         response = Response()
         save_session(
             response,
-            {"user": {"email": "employee@example.com", "name": "Employee"}},
+            {"user": {"email": email, "name": name}},
             self.main.auth_settings,
         )
-        self.client.cookies.set(SESSION_COOKIE_NAME, response.headers["set-cookie"].split(";", 1)[0].split("=", 1)[1])
+        client.cookies.set(SESSION_COOKIE_NAME, response.headers["set-cookie"].split(";", 1)[0].split("=", 1)[1])
 
     def tearDown(self) -> None:
         self.client.close()
@@ -204,6 +207,7 @@ class DigestGuardTests(unittest.TestCase):
         self.assertNotIn("Candidate title", response.text)
 
     def test_item_save_supports_ajax_without_redirect(self) -> None:
+        item = self.storage.get_item("item-1")
         response = self.client.post(
             "/review/2026-04/items/item-1",
             data={
@@ -211,6 +215,7 @@ class DigestGuardTests(unittest.TestCase):
                 "description": "Updated description",
                 "category": "",
                 "status": "approved",
+                "object_version": str(item.version),
             },
             headers={"X-Requested-With": "XMLHttpRequest"},
         )
@@ -219,6 +224,91 @@ class DigestGuardTests(unittest.TestCase):
         self.assertEqual(response.json()["ok"], True)
         self.assertEqual(self.storage.get_item("item-1").title, "Updated title")
         self.assertEqual(self.storage.get_item("item-1").status, ItemStatus.APPROVED)
+        self.assertGreater(response.json()["version"], item.version)
+
+    def test_item_save_rejects_stale_version(self) -> None:
+        item = self.storage.get_item("item-1")
+        self.storage.update_item(
+            item_id="item-1",
+            title="Someone else title",
+            description="Feature description",
+            category=None,
+            status=ItemStatus.DRAFT.value,
+            is_paid_feature=False,
+            expected_version=item.version,
+        )
+
+        response = self.client.post(
+            "/review/2026-04/items/item-1",
+            data={
+                "title": "My stale title",
+                "description": "Updated description",
+                "category": "",
+                "status": "approved",
+                "object_version": str(item.version),
+            },
+            headers={"X-Requested-With": "XMLHttpRequest"},
+        )
+
+        self.assertEqual(response.status_code, 409)
+        self.assertIn("уже изменил другой ревьюер", response.json()["message"])
+        self.assertEqual(self.storage.get_item("item-1").title, "Someone else title")
+
+    def test_summary_save_rejects_stale_version(self) -> None:
+        release = self.storage.get_release("2026-04")
+        self.storage.update_release_summary(
+            "2026-04",
+            "Someone else summary",
+            SummaryStatus.APPROVED.value,
+            expected_version=release.version,
+        )
+
+        response = self.client.post(
+            "/review/2026-04/summary",
+            data={
+                "summary": "My stale summary",
+                "summary_status": SummaryStatus.REVIEWED.value,
+                "object_version": str(release.version),
+            },
+            headers={"X-Requested-With": "XMLHttpRequest"},
+        )
+
+        self.assertEqual(response.status_code, 409)
+        self.assertIn("Summary уже изменил другой ревьюер", response.json()["message"])
+        self.assertEqual(self.storage.get_release("2026-04").summary, "Someone else summary")
+
+    def test_review_lock_shows_current_editor_and_allows_takeover(self) -> None:
+        first_response = self.client.post(
+            "/review/2026-04/locks",
+            data={"object_type": "item", "object_id": "item-1"},
+            headers={"X-Requested-With": "XMLHttpRequest"},
+        )
+
+        self.assertEqual(first_response.status_code, 200)
+        self.assertEqual(first_response.json()["lock"]["owner_name"], "Employee")
+
+        other_client = TestClient(self.main.app)
+        self.addCleanup(other_client.close)
+        self._authenticate_client(other_client, "other@example.com", "Other")
+
+        blocked_response = other_client.post(
+            "/review/2026-04/locks",
+            data={"object_type": "item", "object_id": "item-1"},
+            headers={"X-Requested-With": "XMLHttpRequest"},
+        )
+
+        self.assertEqual(blocked_response.status_code, 409)
+        self.assertEqual(blocked_response.json()["lock"]["owner_name"], "Employee")
+        self.assertFalse(blocked_response.json()["lock"]["is_mine"])
+
+        takeover_response = other_client.post(
+            "/review/2026-04/locks",
+            data={"object_type": "item", "object_id": "item-1", "force": "true"},
+            headers={"X-Requested-With": "XMLHttpRequest"},
+        )
+
+        self.assertEqual(takeover_response.status_code, 200)
+        self.assertEqual(takeover_response.json()["lock"]["owner_name"], "Other")
 
     def test_release_candidate_can_be_promoted_to_main_release_list(self) -> None:
         response = self.client.post(

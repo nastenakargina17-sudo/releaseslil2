@@ -65,6 +65,8 @@ class DigestItem:
     image_paths: List[str] = field(default_factory=list)
     tracker_urls: List[str] = field(default_factory=list)
     grouping_mode: GroupingMode = GroupingMode.SINGLE_TASK
+    version: int = 1
+    updated_at: str = ""
 
 
 @dataclass
@@ -73,3 +75,5 @@ class DigestRelease:
     release_date: str
     summary: str
     summary_status: SummaryStatus = SummaryStatus.DRAFT
+    version: int = 1
+    updated_at: str = ""

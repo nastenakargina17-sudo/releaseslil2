@@ -55,12 +55,16 @@ from app.services.telegram_bot import TelegramBotService
 from app.session import clear_session, load_session, save_session
 from app.storage import (
     add_item_image,
+    claim_review_lock,
     get_release,
     init_db,
     get_item,
     list_items,
+    list_review_locks,
     remove_item_image,
     replace_release_items,
+    release_review_lock,
+    StaleObjectError,
     update_item,
     update_release_summary,
     upsert_release,
@@ -325,14 +329,20 @@ def update_summary(
     release_id: str,
     summary: str = Form(...),
     summary_status: str = Form(...),
+    object_version: Optional[int] = Form(None),
 ) -> Response:
-    update_release_summary(release_id, summary, summary_status)
+    try:
+        update_release_summary(release_id, summary, summary_status, expected_version=object_version)
+    except StaleObjectError:
+        return _stale_object_response("Summary уже изменил другой ревьюер. Обновите страницу перед сохранением.")
+    updated_release = get_release(release_id)
     if _wants_json(request):
         return JSONResponse(
             {
                 "ok": True,
                 "message": "Summary успешно сохранено.",
                 "summary_status": summary_status,
+                "version": updated_release.version if updated_release else object_version,
             }
         )
     return RedirectResponse(url=f"/review/{release_id}", status_code=303)
@@ -350,6 +360,7 @@ def update_review_item(
     is_paid_feature: Optional[str] = Form(None),
     exclude_from_release: Optional[str] = Form(None),
     release_candidate_action: Optional[str] = Form(None),
+    object_version: Optional[int] = Form(None),
 ) -> Response:
     item = get_item(item_id)
     if item is None:
@@ -373,15 +384,20 @@ def update_review_item(
             effective_category = None
             effective_description = ""
 
-    update_item(
-        item_id=item_id,
-        title=title,
-        description=effective_description,
-        category=effective_category,
-        status=effective_status,
-        is_paid_feature=is_paid_feature == "on",
-        item_type=effective_type.value,
-    )
+    try:
+        update_item(
+            item_id=item_id,
+            title=title,
+            description=effective_description,
+            category=effective_category,
+            status=effective_status,
+            is_paid_feature=is_paid_feature == "on",
+            item_type=effective_type.value,
+            expected_version=object_version,
+        )
+    except StaleObjectError:
+        return _stale_object_response("Этот пункт уже изменил другой ревьюер. Обновите страницу перед сохранением.")
+    updated_item = get_item(item_id)
     if _wants_json(request):
         return JSONResponse(
             {
@@ -390,10 +406,52 @@ def update_review_item(
                 "item_id": item_id,
                 "status": effective_status,
                 "item_type": effective_type.value,
+                "version": updated_item.version if updated_item else object_version,
                 "reload": moved_to_primary,
             }
         )
     return RedirectResponse(url=f"/review/{release_id}", status_code=303)
+
+
+@app.get("/review/{release_id}/locks")
+def review_locks(request: Request, release_id: str) -> JSONResponse:
+    owner_key, _ = _review_lock_owner(request)
+    return JSONResponse({"ok": True, "locks": list_review_locks(release_id, owner_key)})
+
+
+@app.post("/review/{release_id}/locks")
+def claim_lock(
+    request: Request,
+    release_id: str,
+    object_type: str = Form(...),
+    object_id: str = Form(...),
+    force: Optional[str] = Form(None),
+) -> JSONResponse:
+    _validate_lock_object(object_type, object_id, release_id)
+    owner_key, owner_name = _review_lock_owner(request)
+    lock = claim_review_lock(
+        release_id=release_id,
+        object_type=object_type,
+        object_id=object_id,
+        owner_key=owner_key,
+        owner_name=owner_name,
+        force=force == "true",
+    )
+    status_code = 200 if lock.get("claimed") else 409
+    return JSONResponse({"ok": bool(lock.get("claimed")), "lock": lock}, status_code=status_code)
+
+
+@app.post("/review/{release_id}/locks/release")
+def release_lock(
+    request: Request,
+    release_id: str,
+    object_type: str = Form(...),
+    object_id: str = Form(...),
+) -> JSONResponse:
+    _validate_lock_object(object_type, object_id, release_id)
+    owner_key, _ = _review_lock_owner(request)
+    release_review_lock(release_id, object_type, object_id, owner_key)
+    return JSONResponse({"ok": True})
 
 
 @app.post("/review/{release_id}/items/{item_id}/image")
@@ -552,6 +610,35 @@ def final_digest(request: Request, release_id: str) -> HTMLResponse:
 
 def _wants_json(request: Request) -> bool:
     return request.headers.get("x-requested-with") == "XMLHttpRequest"
+
+
+def _stale_object_response(message: str) -> Response:
+    return JSONResponse(
+        {"ok": False, "message": message, "detail": message},
+        status_code=409,
+    )
+
+
+def _review_lock_owner(request: Request) -> tuple[str, str]:
+    user = getattr(request.state, "review_session", {}).get("user") or {}
+    email = str(user.get("email") or "").strip().lower()
+    name = str(user.get("name") or "").strip()
+    owner_key = email or name or "unknown-reviewer"
+    owner_name = name or email or "Ревьюер"
+    return owner_key, owner_name
+
+
+def _validate_lock_object(object_type: str, object_id: str, release_id: str) -> None:
+    if object_type == "summary":
+        if object_id != release_id:
+            raise HTTPException(status_code=400, detail="Некорректный объект блокировки.")
+        return
+    if object_type == "item":
+        item = get_item(object_id)
+        if item is None or item.release_id != release_id:
+            raise HTTPException(status_code=404, detail="Digest item not found")
+        return
+    raise HTTPException(status_code=400, detail="Некорректный тип блокировки.")
 
 
 def _max_bytes_for_upload(content_type: str) -> Optional[int]:
