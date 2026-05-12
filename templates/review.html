@@ -153,6 +153,23 @@
       border: 1px solid rgba(255, 255, 255, 0.18);
     }
 
+    .hero-chip.presence-chip {
+      display: inline-flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .presence-name {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.13);
+      color: #fff;
+      font-weight: 700;
+    }
+
     .action-bar {
       position: sticky;
       top: 14px;
@@ -459,12 +476,6 @@
       box-shadow: 0 16px 32px rgba(77, 242, 86, 0.24);
     }
 
-    .button-logout {
-      background: rgba(255, 255, 255, 0.12);
-      border: 1px solid rgba(255, 255, 255, 0.18);
-      color: #fff;
-    }
-
     .source-links {
       gap: 10px;
       align-items: baseline;
@@ -641,11 +652,6 @@
     <section class="hero">
       <div class="hero-top">
         <div class="eyebrow">Review Workspace</div>
-        {% if review_user %}
-          <form method="post" action="/auth/logout">
-            <button type="submit" class="button button-logout">Выйти из ревью</button>
-          </form>
-        {% endif %}
       </div>
 
       <h1>Ревью релиза {{ release.id }}</h1>
@@ -656,7 +662,12 @@
       <div class="hero-meta">
         <span class="hero-chip">Дата релиза: <strong>{{ release.release_date }}</strong></span>
         {% if review_user %}
-          <span class="hero-chip">Авторизован сотрудник: <strong>{{ review_user.name }}</strong> ({{ review_user.email }})</span>
+          <span class="hero-chip presence-chip" data-presence-chip>
+            На странице сейчас:
+            <span data-presence-list>
+              <span class="presence-name">{{ review_user.name }}</span>
+            </span>
+          </span>
         {% endif %}
         <span class="hero-chip">Пунктов в ревью: <strong>{{ items|length }}</strong></span>
       </div>
@@ -689,7 +700,7 @@
         <span class="filter-label">Быстрый фильтр:</span>
         <button type="button" class="button button-subtle button-filter is-active" data-filter-value="all">Все пункты</button>
         <button type="button" class="button button-subtle button-filter" data-filter-value="needs_review">Требуют ревью</button>
-        <button type="button" class="button button-subtle button-filter" data-filter-value="release_candidate">Кандидаты из "Нет"</button>
+        <button type="button" class="button button-subtle button-filter" data-filter-value="release_candidate">Задачи из "Нет"</button>
         <button type="button" class="button button-subtle button-filter" data-filter-value="draft">Черновики</button>
         <button type="button" class="button button-subtle button-filter" data-filter-value="reviewed">На проверке</button>
         <button type="button" class="button button-subtle button-filter" data-filter-value="approved">Подтверждено</button>
@@ -709,7 +720,13 @@
     {% endif %}
 
     <div class="layout">
-      <section class="summary-card" id="summary-card" data-summary-card data-summary-approved="{{ 'true' if release.summary_status.value == approved_summary_status else 'false' }}">
+      <section
+        class="summary-card"
+        id="summary-card"
+        data-summary-card
+        data-summary-status="{{ release.summary_status.value }}"
+        data-summary-approved="{{ 'true' if release.summary_status.value == approved_summary_status else 'false' }}"
+      >
         <div class="section-head">
           <div class="section-copy">
             <h2>Summary релиза</h2>
@@ -937,7 +954,7 @@
           <section class="stack">
             <div class="section-head">
               <div class="section-copy">
-                <h2>Отдельный список кандидатов из "Нет"</h2>
+                <h2>Задачи из "Нет"</h2>
                 <p>Эти задачи пришли из трекера со значением <strong>inTheReleaseDescription = "Нет"</strong>. Мы не генерируем им описание автоматически и не включаем в релиз, пока ревьюер явно не примет решение.</p>
               </div>
               <span class="mini-pill">Кандидатов: {{ candidate_items|length }}</span>
@@ -1028,6 +1045,7 @@
       const confirmDigestButton = document.getElementById("confirm-digest-button");
       const summaryCard = document.querySelector("[data-summary-card]");
       const toastStack = document.getElementById("toast-stack");
+      const presenceList = document.querySelector("[data-presence-list]");
       const filterButtons = Array.from(document.querySelectorAll("[data-filter-value]"));
       const itemCards = Array.from(document.querySelectorAll("[data-item-card]"));
       const reviewForms = Array.from(document.querySelectorAll("[data-review-form]"));
@@ -1074,6 +1092,15 @@
 
       const applyFilter = () => {
         const currentFilter = activeFilter();
+        if (summaryCard) {
+          const summaryStatus = summaryCard.dataset.summaryStatus || "";
+          summaryCard.hidden = !(
+            currentFilter === "all"
+            || (currentFilter === "needs_review" && summaryStatus !== "{{ approved_summary_status }}")
+            || currentFilter === summaryStatus
+          );
+        }
+
         itemCards.forEach((card) => {
           const status = getCardStatus(card);
           const bucket = card.dataset.itemBucket || "primary";
@@ -1142,8 +1169,10 @@
           return;
         }
         summaryCard.dataset.summaryApproved = String(select.value === "{{ approved_summary_status }}");
+        summaryCard.dataset.summaryStatus = select.value;
         pill.textContent = select.options[select.selectedIndex]?.textContent || "";
         pill.className = `status-pill status-${select.value}`;
+        applyFilter();
       };
 
       const markDirtyState = (form) => {
@@ -1265,6 +1294,48 @@
           throw error;
         }
         return payload;
+      };
+
+      const renderPresence = (users) => {
+        if (!presenceList) {
+          return;
+        }
+        presenceList.innerHTML = "";
+        const uniqueNames = [];
+        (users || []).forEach((user) => {
+          const name = (user.owner_name || "").trim();
+          if (name && !uniqueNames.includes(name)) {
+            uniqueNames.push(name);
+          }
+        });
+        if (!uniqueNames.length) {
+          uniqueNames.push("Вы");
+        }
+        uniqueNames.forEach((name) => {
+          const item = document.createElement("span");
+          item.className = "presence-name";
+          item.textContent = name;
+          presenceList.appendChild(item);
+        });
+      };
+
+      const touchPresence = async () => {
+        try {
+          const payload = await fetchJson("/review/{{ release.id }}/presence", {
+            method: "POST",
+          });
+          renderPresence(payload.users || []);
+        } catch (error) {
+          // Presence is informational; avoid noisy errors while someone is editing.
+        }
+      };
+
+      const releasePresence = () => {
+        if (!navigator.sendBeacon) {
+          return;
+        }
+        const formData = new FormData();
+        navigator.sendBeacon("/review/{{ release.id }}/presence/release", formData);
       };
 
       const lockKeyForForm = (form) => `${form.dataset.lockObjectType}:${form.dataset.lockObjectId}`;
@@ -1515,6 +1586,9 @@
 
       refreshLocks();
       window.setInterval(refreshLocks, 12000);
+      touchPresence();
+      window.setInterval(touchPresence, 15000);
+      window.addEventListener("pagehide", releasePresence);
 
       document.querySelectorAll(".upload-row").forEach((form) => {
         form.addEventListener("submit", async (event) => {

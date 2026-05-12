@@ -60,6 +60,15 @@ def init_db() -> None:
                 updated_at REAL NOT NULL,
                 PRIMARY KEY (release_id, object_type, object_id)
             );
+
+            CREATE TABLE IF NOT EXISTS review_presence (
+                release_id TEXT NOT NULL,
+                owner_key TEXT NOT NULL,
+                owner_name TEXT NOT NULL,
+                expires_at REAL NOT NULL,
+                updated_at REAL NOT NULL,
+                PRIMARY KEY (release_id, owner_key)
+            );
             """
         )
         _ensure_column(conn, "digest_releases", "version", "INTEGER NOT NULL DEFAULT 1")
@@ -321,8 +330,71 @@ def list_review_locks(release_id: str, owner_key: str) -> List[dict]:
     return [_row_to_lock(row, owner_key) for row in rows]
 
 
+def touch_review_presence(
+    release_id: str,
+    owner_key: str,
+    owner_name: str,
+    ttl_seconds: int = 45,
+) -> List[dict]:
+    now = time.time()
+    expires_at = now + ttl_seconds
+    with connect() as conn:
+        _delete_expired_presence(conn, now)
+        conn.execute(
+            """
+            INSERT INTO review_presence (release_id, owner_key, owner_name, expires_at, updated_at)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(release_id, owner_key) DO UPDATE SET
+                owner_name = excluded.owner_name,
+                expires_at = excluded.expires_at,
+                updated_at = excluded.updated_at
+            """,
+            (release_id, owner_key, owner_name, expires_at, now),
+        )
+        return _list_review_presence(conn, release_id, owner_key, now)
+
+
+def list_review_presence(release_id: str, owner_key: str) -> List[dict]:
+    now = time.time()
+    with connect() as conn:
+        _delete_expired_presence(conn, now)
+        return _list_review_presence(conn, release_id, owner_key, now)
+
+
+def release_review_presence(release_id: str, owner_key: str) -> None:
+    with connect() as conn:
+        conn.execute(
+            "DELETE FROM review_presence WHERE release_id = ? AND owner_key = ?",
+            (release_id, owner_key),
+        )
+
+
 def _delete_expired_locks(conn: sqlite3.Connection, now: float) -> None:
     conn.execute("DELETE FROM review_locks WHERE expires_at <= ?", (now,))
+
+
+def _delete_expired_presence(conn: sqlite3.Connection, now: float) -> None:
+    conn.execute("DELETE FROM review_presence WHERE expires_at <= ?", (now,))
+
+
+def _list_review_presence(conn: sqlite3.Connection, release_id: str, owner_key: str, now: float) -> List[dict]:
+    rows = conn.execute(
+        """
+        SELECT release_id, owner_key, owner_name, expires_at, updated_at
+        FROM review_presence
+        WHERE release_id = ? AND expires_at > ?
+        ORDER BY updated_at DESC
+        """,
+        (release_id, now),
+    ).fetchall()
+    return [
+        {
+            "release_id": row["release_id"],
+            "owner_name": row["owner_name"],
+            "is_me": row["owner_key"] == owner_key,
+        }
+        for row in rows
+    ]
 
 
 def _row_to_lock(row: sqlite3.Row, owner_key: str) -> dict:

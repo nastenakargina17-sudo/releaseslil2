@@ -182,7 +182,9 @@ class DigestGuardTests(unittest.TestCase):
         self.assertIn("Сохранить изменения", response.text)
         self.assertIn("Исключить из релиза", response.text)
         self.assertIn("Категория ценности", response.text)
-        self.assertIn('Кандидаты из "Нет"', response.text)
+        self.assertIn('Задачи из "Нет"', response.text)
+        self.assertIn("На странице сейчас", response.text)
+        self.assertNotIn("Выйти из ревью", response.text)
 
     def test_digest_route_rejects_non_final_items(self) -> None:
         response = self.client.get("/digest/2026-04")
@@ -309,6 +311,29 @@ class DigestGuardTests(unittest.TestCase):
 
         self.assertEqual(takeover_response.status_code, 200)
         self.assertEqual(takeover_response.json()["lock"]["owner_name"], "Other")
+
+    def test_review_presence_lists_users_on_page(self) -> None:
+        first_response = self.client.post(
+            "/review/2026-04/presence",
+            headers={"X-Requested-With": "XMLHttpRequest"},
+        )
+
+        self.assertEqual(first_response.status_code, 200)
+        self.assertEqual(first_response.json()["users"][0]["owner_name"], "Employee")
+
+        other_client = TestClient(self.main.app)
+        self.addCleanup(other_client.close)
+        self._authenticate_client(other_client, "other@example.com", "Other")
+        second_response = other_client.post(
+            "/review/2026-04/presence",
+            headers={"X-Requested-With": "XMLHttpRequest"},
+        )
+
+        self.assertEqual(second_response.status_code, 200)
+        self.assertEqual(
+            {user["owner_name"] for user in second_response.json()["users"]},
+            {"Employee", "Other"},
+        )
 
     def test_release_candidate_can_be_promoted_to_main_release_list(self) -> None:
         response = self.client.post(

@@ -60,11 +60,14 @@ from app.storage import (
     init_db,
     get_item,
     list_items,
+    list_review_presence,
     list_review_locks,
     remove_item_image,
     replace_release_items,
+    release_review_presence,
     release_review_lock,
     StaleObjectError,
+    touch_review_presence,
     update_item,
     update_release_summary,
     upsert_release,
@@ -417,6 +420,26 @@ def update_review_item(
 def review_locks(request: Request, release_id: str) -> JSONResponse:
     owner_key, _ = _review_lock_owner(request)
     return JSONResponse({"ok": True, "locks": list_review_locks(release_id, owner_key)})
+
+
+@app.get("/review/{release_id}/presence")
+def review_presence(request: Request, release_id: str) -> JSONResponse:
+    owner_key, _ = _review_lock_owner(request)
+    return JSONResponse({"ok": True, "users": list_review_presence(release_id, owner_key)})
+
+
+@app.post("/review/{release_id}/presence")
+def touch_presence(request: Request, release_id: str) -> JSONResponse:
+    owner_key, owner_name = _review_lock_owner(request)
+    users = touch_review_presence(release_id, owner_key, owner_name)
+    return JSONResponse({"ok": True, "users": users})
+
+
+@app.post("/review/{release_id}/presence/release")
+def release_presence(request: Request, release_id: str) -> JSONResponse:
+    owner_key, _ = _review_lock_owner(request)
+    release_review_presence(release_id, owner_key)
+    return JSONResponse({"ok": True})
 
 
 @app.post("/review/{release_id}/locks")

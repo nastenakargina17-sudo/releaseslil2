@@ -118,7 +118,8 @@ class ReviewAuthTests(unittest.TestCase):
 
         self.assertEqual(review_response.status_code, 200)
         self.assertIn("Release Reviewer", review_response.text)
-        self.assertIn("employee@example.com", review_response.text)
+        self.assertIn("На странице сейчас", review_response.text)
+        self.assertNotIn("employee@example.com", review_response.text)
 
     def test_non_allowlisted_email_is_rejected(self) -> None:
         login_response = self.client.get(
