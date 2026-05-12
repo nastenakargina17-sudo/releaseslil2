@@ -380,6 +380,35 @@ class DigestGuardTests(unittest.TestCase):
         self.assertIn("Исправления и технические улучшения", response.text)
         self.assertNotIn("<details open", response.text)
 
+    def test_digest_omits_empty_publication_sections(self) -> None:
+        self.storage.replace_release_items(
+            "2026-04",
+            [
+                DigestItem(
+                    id="bugfix-approved",
+                    release_id="2026-04",
+                    source_item_ids=["DEV-40"],
+                    title="Fixed reminder",
+                    description="",
+                    module="Напоминания",
+                    type=ItemType.BUGFIX,
+                    category=None,
+                    status=ItemStatus.APPROVED,
+                    tracker_urls=["https://tracker.yandex.ru/DEV-40"],
+                    grouping_mode=GroupingMode.SINGLE_TASK,
+                ),
+            ],
+        )
+
+        response = self.client.get("/digest/2026-04")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("Нет новых фич", response.text)
+        self.assertNotIn("Нет изменений", response.text)
+        self.assertNotIn('id="new-features-heading"', response.text)
+        self.assertNotIn('id="changes-heading"', response.text)
+        self.assertIn("Исправления и технические улучшения", response.text)
+
     def test_item_save_supports_ajax_without_redirect(self) -> None:
         item = self.storage.get_item("item-1")
         response = self.client.post(
