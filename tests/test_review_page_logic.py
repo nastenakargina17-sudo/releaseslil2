@@ -89,6 +89,25 @@ class ReviewPageLogicTests(unittest.TestCase):
 
         self.assertEqual(item_type, ItemType.RELEASE_CANDIDATE)
 
+    def test_client_value_category_labels_are_human_readable(self) -> None:
+        from app.models import ValueCategory
+        from app.review_utils import CLIENT_CATEGORY_LABELS
+
+        self.assertEqual(CLIENT_CATEGORY_LABELS[ValueCategory.TIME_SAVING], "Экономия времени")
+        self.assertEqual(CLIENT_CATEGORY_LABELS[ValueCategory.ERROR_REDUCTION], "Меньше ошибок")
+        self.assertEqual(CLIENT_CATEGORY_LABELS[ValueCategory.CLARITY_TRANSPARENCY], "Больше прозрачности")
+        self.assertEqual(CLIENT_CATEGORY_LABELS[ValueCategory.DAILY_WORK_CONVENIENCE], "Удобнее в ежедневной работе")
+        self.assertEqual(CLIENT_CATEGORY_LABELS[ValueCategory.BETTER_CONTROL], "Больше контроля")
+        self.assertEqual(CLIENT_CATEGORY_LABELS[ValueCategory.LESS_COMMUNICATION_OVERHEAD], "Меньше ручных согласований")
+
+    def test_digest_media_helper_detects_video_paths(self) -> None:
+        from app.review_utils import is_video_media_path
+
+        self.assertTrue(is_video_media_path("/uploads/demo.mp4"))
+        self.assertTrue(is_video_media_path("/uploads/demo.WEBM"))
+        self.assertFalse(is_video_media_path("/uploads/demo.png"))
+        self.assertFalse(is_video_media_path(""))
+
 
 class DigestGuardTests(unittest.TestCase):
     def setUp(self) -> None:
