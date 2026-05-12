@@ -61,7 +61,7 @@ def _preserve_existing_copy_when_ai_falls_back(existing_release, existing_items,
         existing_item = existing_by_signature.get(_item_signature(item))
         if existing_item is None:
             continue
-        if item.description == _fallback_description_for_item(item) and existing_item.description != item.description:
+        if _looks_like_fallback_description(item) and existing_item.description != item.description:
             item.description = existing_item.description
 
 
@@ -89,5 +89,25 @@ def _fallback_description_for_item(item) -> str:
             item.title,
             item.category,
             [],
+        )
+    return item.description
+
+
+def _looks_like_fallback_description(item) -> bool:
+    if item.description == _fallback_description_for_item(item):
+        return True
+    return item.description == _legacy_fallback_description_for_item(item)
+
+
+def _legacy_fallback_description_for_item(item) -> str:
+    if item.type.value == "new_feature":
+        return (
+            f'В модуле {item.module} добавили новое улучшение вокруг сценария "{item.title}", '
+            "чтобы пользователям было проще выполнять ежедневные операции и быстрее проходить рабочие шаги."
+        )
+    if item.type.value == "change":
+        return (
+            f'В модуле {item.module} обновили сценарий "{item.title}", '
+            "чтобы пользователям было проще выполнять ежедневные операции и быстрее проходить рабочие шаги."
         )
     return item.description
