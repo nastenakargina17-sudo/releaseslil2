@@ -1,7 +1,7 @@
 from pathlib import Path
 from uuid import uuid4
 
-from collections import defaultdict, deque
+from collections import deque
 import mimetypes
 from typing import Optional
 from urllib.parse import urlencode
@@ -42,11 +42,13 @@ from app.notifications.telegram import (
 )
 from app.review_utils import (
     CATEGORY_LABELS,
+    CLIENT_CATEGORY_LABELS,
     DESCRIPTIONLESS_ITEM_TYPES,
     ITEM_TYPE_LABELS,
     STATUS_LABELS,
     default_item_category,
     digest_blockers,
+    is_video_media_path,
 )
 from app.services.ingest import build_release
 from app.services.importers import import_release_from_apis
@@ -601,22 +603,17 @@ def final_digest(request: Request, release_id: str) -> HTMLResponse:
     if blockers:
         raise HTTPException(status_code=400, detail="Сначала подтвердите summary релиза.")
 
-    items = [item for item in all_items if item.status == ItemStatus.APPROVED]
+    approved_items = [
+        item for item in all_items
+        if item.status == ItemStatus.APPROVED and item.type != ItemType.RELEASE_CANDIDATE
+    ]
 
-    grouped_bugfixes = defaultdict(list)
-    grouped_technical = defaultdict(list)
-    new_features = []
-    changes = []
-
-    for item in items:
-        if item.type == ItemType.NEW_FEATURE:
-            new_features.append(item)
-        elif item.type == ItemType.CHANGE:
-            changes.append(item)
-        elif item.type == ItemType.BUGFIX:
-            grouped_bugfixes[item.module].append(item)
-        elif item.type == ItemType.TECHNICAL_IMPROVEMENT:
-            grouped_technical[item.module].append(item)
+    new_features = [item for item in approved_items if item.type == ItemType.NEW_FEATURE]
+    changes = [item for item in approved_items if item.type == ItemType.CHANGE]
+    support_items = [
+        item for item in approved_items
+        if item.type in {ItemType.BUGFIX, ItemType.TECHNICAL_IMPROVEMENT}
+    ]
 
     return templates.TemplateResponse(
         request,
@@ -625,8 +622,10 @@ def final_digest(request: Request, release_id: str) -> HTMLResponse:
             "release": release,
             "new_features": new_features,
             "changes": changes,
-            "grouped_bugfixes": dict(grouped_bugfixes),
-            "grouped_technical": dict(grouped_technical),
+            "support_items": support_items,
+            "category_labels": CLIENT_CATEGORY_LABELS,
+            "item_type_labels": ITEM_TYPE_LABELS,
+            "is_video_media_path": is_video_media_path,
         },
     )
 

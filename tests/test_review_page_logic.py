@@ -8,7 +8,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 from fastapi.responses import Response
 
-from app.models import DigestItem, DigestRelease, GroupingMode, ItemStatus, ItemType, SourceItem, SummaryStatus
+from app.models import DigestItem, DigestRelease, GroupingMode, ItemStatus, ItemType, SourceItem, SummaryStatus, ValueCategory
 from app.session import SESSION_COOKIE_NAME, save_session
 
 
@@ -226,6 +226,76 @@ class DigestGuardTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("Feature title", response.text)
         self.assertNotIn("Candidate title", response.text)
+
+    def test_digest_publishes_only_approved_items_in_public_sections(self) -> None:
+        self.storage.replace_release_items(
+            "2026-04",
+            [
+                DigestItem(
+                    id="feature-approved",
+                    release_id="2026-04",
+                    source_item_ids=["DEV-10"],
+                    title="Approved feature",
+                    description="Client-facing feature text",
+                    module="Подбор",
+                    type=ItemType.NEW_FEATURE,
+                    category=ValueCategory.TIME_SAVING,
+                    status=ItemStatus.APPROVED,
+                    tracker_urls=["https://tracker.yandex.ru/DEV-10"],
+                    grouping_mode=GroupingMode.SINGLE_TASK,
+                ),
+                DigestItem(
+                    id="change-approved",
+                    release_id="2026-04",
+                    source_item_ids=["DEV-11"],
+                    title="Approved change",
+                    description="Client-facing change text",
+                    module="Отчеты",
+                    type=ItemType.CHANGE,
+                    category=ValueCategory.CLARITY_TRANSPARENCY,
+                    status=ItemStatus.APPROVED,
+                    tracker_urls=["https://tracker.yandex.ru/DEV-11"],
+                    grouping_mode=GroupingMode.SINGLE_TASK,
+                ),
+                DigestItem(
+                    id="feature-excluded",
+                    release_id="2026-04",
+                    source_item_ids=["DEV-12"],
+                    title="Excluded feature",
+                    description="Hidden text",
+                    module="Подбор",
+                    type=ItemType.NEW_FEATURE,
+                    category=ValueCategory.TIME_SAVING,
+                    status=ItemStatus.EXCLUDED,
+                    tracker_urls=["https://tracker.yandex.ru/DEV-12"],
+                    grouping_mode=GroupingMode.SINGLE_TASK,
+                ),
+                DigestItem(
+                    id="bugfix-approved",
+                    release_id="2026-04",
+                    source_item_ids=["DEV-13"],
+                    title="Approved fix",
+                    description="",
+                    module="Интеграции",
+                    type=ItemType.BUGFIX,
+                    category=None,
+                    status=ItemStatus.APPROVED,
+                    tracker_urls=["https://tracker.yandex.ru/DEV-13"],
+                    grouping_mode=GroupingMode.SINGLE_TASK,
+                ),
+            ],
+        )
+
+        response = self.client.get("/digest/2026-04")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Что нового", response.text)
+        self.assertIn("Что стало удобнее", response.text)
+        self.assertIn("Исправления и технические улучшения", response.text)
+        self.assertIn("Approved feature", response.text)
+        self.assertIn("Approved change", response.text)
+        self.assertIn("Approved fix", response.text)
+        self.assertNotIn("Excluded feature", response.text)
 
     def test_item_save_supports_ajax_without_redirect(self) -> None:
         item = self.storage.get_item("item-1")
