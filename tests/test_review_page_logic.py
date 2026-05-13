@@ -317,6 +317,82 @@ class DigestGuardTests(unittest.TestCase):
                 uploads_dir=self.config.UPLOADS_DIR,
             )
 
+    def test_prepare_preview_requires_ready_release(self) -> None:
+        response = self.client.post("/review/2026-04/prepare-digest-preview", follow_redirects=False)
+
+        self.assertEqual(response.status_code, 303)
+        self.assertIn("digest_not_ready", response.headers["location"])
+        self.assertEqual(self.storage.get_release("2026-04").publication_status, PublicationStatus.DRAFT)
+
+    def test_prepare_preview_sets_preview_status_when_ready(self) -> None:
+        self.storage.update_item(
+            item_id="item-1",
+            title="Feature title",
+            description="Feature description",
+            category=ValueCategory.TIME_SAVING.value,
+            status=ItemStatus.APPROVED.value,
+            is_paid_feature=False,
+        )
+
+        response = self.client.post("/review/2026-04/prepare-digest-preview", follow_redirects=False)
+
+        self.assertEqual(response.status_code, 303)
+        self.assertIn("/review/2026-04/digest-preview", response.headers["location"])
+        release = self.storage.get_release("2026-04")
+        self.assertEqual(release.publication_status, PublicationStatus.PREVIEW)
+        self.assertEqual(release.preview_prepared_by, "Employee")
+
+    def test_review_edit_resets_preview_to_draft_with_explanation(self) -> None:
+        self.storage.update_release_publication_status(
+            "2026-04",
+            PublicationStatus.PREVIEW,
+            note="Preview сформирован.",
+            preview_prepared_by="Employee",
+        )
+        item = self.storage.get_item("item-1")
+
+        response = self.client.post(
+            "/review/2026-04/items/item-1",
+            data={
+                "title": "Updated title",
+                "description": "Updated description",
+                "category": "",
+                "status": "approved",
+                "object_version": str(item.version),
+            },
+            follow_redirects=False,
+        )
+
+        self.assertEqual(response.status_code, 303)
+        release = self.storage.get_release("2026-04")
+        self.assertEqual(release.publication_status, PublicationStatus.DRAFT)
+        self.assertIn("Preview сброшен", release.publication_status_note)
+
+    def test_published_release_blocks_review_edits(self) -> None:
+        self.storage.update_release_publication_status(
+            "2026-04",
+            PublicationStatus.PUBLISHED,
+            note="Дайджест опубликован.",
+            published_by="Employee",
+        )
+        item = self.storage.get_item("item-1")
+
+        response = self.client.post(
+            "/review/2026-04/items/item-1",
+            data={
+                "title": "Should not save",
+                "description": "Should not save",
+                "category": "",
+                "status": "approved",
+                "object_version": str(item.version),
+            },
+            headers={"X-Requested-With": "XMLHttpRequest"},
+        )
+
+        self.assertEqual(response.status_code, 409)
+        self.assertIn("уже опубликован", response.json()["message"])
+        self.assertNotEqual(self.storage.get_item("item-1").title, "Should not save")
+
     def test_digest_route_rejects_non_final_items(self) -> None:
         response = self.client.get("/digest/2026-04")
 

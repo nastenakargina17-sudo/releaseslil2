@@ -34,6 +34,7 @@ from app.config import (
     load_env_file,
 )
 from app.models import ItemStatus, ItemType, SummaryStatus, ValueCategory
+from app.models import PublicationStatus
 from app.notifications.telegram import (
     TelegramNotifier,
     build_digest_ready_message,
@@ -53,6 +54,7 @@ from app.review_utils import (
 from app.services.ingest import build_release
 from app.services.importers import import_release_from_apis
 from app.services.mock_data import sample_source_items
+from app.services.publication import PublicationError, build_published_digest_snapshot
 from app.services.telegram_bot import TelegramBotService
 from app.session import clear_session, load_session, save_session
 from app.storage import (
@@ -61,17 +63,21 @@ from app.storage import (
     get_release,
     init_db,
     get_item,
+    get_published_digest,
     list_items,
     list_review_presence,
     list_review_locks,
     remove_item_image,
     replace_release_items,
+    reset_preview_after_review_change,
     release_review_presence,
     release_review_lock,
+    save_published_digest,
     StaleObjectError,
     touch_review_presence,
     update_item,
     update_release_summary,
+    update_release_publication_status,
     upsert_release,
 )
 
@@ -336,10 +342,13 @@ def update_summary(
     summary_status: str = Form(...),
     object_version: Optional[int] = Form(None),
 ) -> Response:
+    if _release_is_published(release_id):
+        return _published_release_response(request, release_id)
     try:
         update_release_summary(release_id, summary, summary_status, expected_version=object_version)
     except StaleObjectError:
         return _stale_object_response("Summary уже изменил другой ревьюер. Обновите страницу перед сохранением.")
+    reset_preview_after_review_change(release_id)
     updated_release = get_release(release_id)
     if _wants_json(request):
         return JSONResponse(
@@ -370,6 +379,8 @@ def update_review_item(
     item = get_item(item_id)
     if item is None:
         raise HTTPException(status_code=404, detail="Digest item not found")
+    if _release_is_published(release_id):
+        return _published_release_response(request, release_id)
 
     effective_status = ItemStatus.EXCLUDED.value if exclude_from_release == "on" else status
     effective_type = item.type
@@ -402,6 +413,7 @@ def update_review_item(
         )
     except StaleObjectError:
         return _stale_object_response("Этот пункт уже изменил другой ревьюер. Обновите страницу перед сохранением.")
+    reset_preview_after_review_change(release_id)
     updated_item = get_item(item_id)
     if _wants_json(request):
         return JSONResponse(
@@ -489,6 +501,8 @@ async def upload_item_image(
     item = get_item(item_id)
     if item is None:
         raise HTTPException(status_code=404, detail="Digest item not found")
+    if _release_is_published(release_id):
+        return _published_release_response(request, release_id)
 
     content = await image.read()
     content_type = (image.content_type or "").lower()
@@ -505,6 +519,7 @@ async def upload_item_image(
     destination = UPLOADS_DIR / safe_name
     destination.write_bytes(content)
     add_item_image(item_id, f"/uploads/{safe_name}")
+    reset_preview_after_review_change(release_id)
     updated_item = get_item(item_id)
     if _wants_json(request):
         return JSONResponse(
@@ -528,10 +543,13 @@ def delete_item_image(
     item = get_item(item_id)
     if item is None:
         raise HTTPException(status_code=404, detail="Digest item not found")
+    if _release_is_published(release_id):
+        return _published_release_response(request, release_id)
     if image_path not in item.image_paths:
         raise HTTPException(status_code=404, detail="Файл не найден")
 
     remove_item_image(item_id, image_path)
+    reset_preview_after_review_change(release_id)
     local_path = _upload_path_from_public_path(image_path)
     if local_path and local_path.exists():
         local_path.unlink()
@@ -581,6 +599,66 @@ def notify_digest_ready(release_id: str) -> RedirectResponse:
     notifier = TelegramNotifier(get_telegram_settings())
     notifier.send_message(build_digest_ready_message(release, approved_items, digest_url))
     return RedirectResponse(url=f"/review/{release_id}?flash=digest_notified", status_code=303)
+
+
+@app.post("/review/{release_id}/prepare-digest-preview")
+def prepare_digest_preview(request: Request, release_id: str) -> RedirectResponse:
+    release = get_release(release_id)
+    if release is None:
+        raise HTTPException(status_code=404, detail="Release not found")
+    if release.publication_status == PublicationStatus.PUBLISHED:
+        return RedirectResponse(url=f"/review/{release_id}?flash=release_published", status_code=303)
+    items = list_items(release_id)
+    if digest_blockers(release, items):
+        return RedirectResponse(url=f"/review/{release_id}?flash=digest_not_ready", status_code=303)
+    _, owner_name = _review_lock_owner(request)
+    update_release_publication_status(
+        release_id,
+        PublicationStatus.PREVIEW,
+        note="Preview сформирован. Проверьте страницу перед публикацией.",
+        preview_prepared_by=owner_name,
+    )
+    return RedirectResponse(url=f"/review/{release_id}/digest-preview", status_code=303)
+
+
+@app.post("/review/{release_id}/return-digest-to-review")
+def return_digest_to_review(release_id: str) -> RedirectResponse:
+    release = get_release(release_id)
+    if release is None:
+        raise HTTPException(status_code=404, detail="Release not found")
+    if release.publication_status == PublicationStatus.PUBLISHED:
+        return RedirectResponse(url=f"/review/{release_id}?flash=release_published", status_code=303)
+    update_release_publication_status(
+        release_id,
+        PublicationStatus.DRAFT,
+        note="Preview отменен. Можно продолжить ревью и сформировать preview заново.",
+    )
+    return RedirectResponse(url=f"/review/{release_id}?flash=preview_returned", status_code=303)
+
+
+@app.post("/review/{release_id}/publish-digest")
+def publish_digest(request: Request, release_id: str) -> RedirectResponse:
+    release = get_release(release_id)
+    if release is None:
+        raise HTTPException(status_code=404, detail="Release not found")
+    if release.publication_status == PublicationStatus.PUBLISHED:
+        return RedirectResponse(url=f"/review/{release_id}?flash=release_published", status_code=303)
+    items = list_items(release_id)
+    if release.publication_status != PublicationStatus.PREVIEW or digest_blockers(release, items):
+        return RedirectResponse(url=f"/review/{release_id}?flash=preview_required", status_code=303)
+    _, owner_name = _review_lock_owner(request)
+    try:
+        snapshot = build_published_digest_snapshot(release, items, owner_name, UPLOADS_DIR)
+    except PublicationError:
+        return RedirectResponse(url=f"/review/{release_id}?flash=publish_media_error", status_code=303)
+    save_published_digest(snapshot)
+    update_release_publication_status(
+        release_id,
+        PublicationStatus.PUBLISHED,
+        note="Дайджест опубликован. Релиз закрыт для редактирования.",
+        published_by=owner_name,
+    )
+    return RedirectResponse(url=f"/digest/{release_id}", status_code=303)
 
 
 @app.get("/digest/{release_id}", response_class=HTMLResponse)
@@ -639,6 +717,18 @@ def _stale_object_response(message: str) -> Response:
         {"ok": False, "message": message, "detail": message},
         status_code=409,
     )
+
+
+def _published_release_response(request: Request, release_id: str) -> Response:
+    message = "Этот релиз уже опубликован. Редактирование закрыто."
+    if _wants_json(request):
+        return JSONResponse({"ok": False, "message": message, "detail": message}, status_code=409)
+    return RedirectResponse(url=f"/review/{release_id}?flash=release_published", status_code=303)
+
+
+def _release_is_published(release_id: str) -> bool:
+    release = get_release(release_id)
+    return bool(release and release.publication_status == PublicationStatus.PUBLISHED)
 
 
 def _review_lock_owner(request: Request) -> tuple[str, str]:
