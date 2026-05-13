@@ -362,7 +362,7 @@ def update_review_item(
     title: str = Form(...),
     description: str = Form(""),
     category: Optional[str] = Form(None),
-    status: str = Form(...),
+    status: str = Form(ItemStatus.DRAFT.value),
     is_paid_feature: Optional[str] = Form(None),
     exclude_from_release: Optional[str] = Form(None),
     release_candidate_action: Optional[str] = Form(None),
@@ -564,6 +564,7 @@ async def upload_item_image(
                 "message": "Файл успешно загружен.",
                 "item_id": item_id,
                 "media_paths": updated_item.image_paths if updated_item else [],
+                "version": updated_item.version if updated_item else item.version,
             }
         )
     return RedirectResponse(url=f"/review/{release_id}?flash=image_uploaded", status_code=303)
@@ -595,6 +596,7 @@ def delete_item_image(
                 "message": "Файл удален.",
                 "item_id": item_id,
                 "media_paths": updated_item.image_paths if updated_item else [],
+                "version": updated_item.version if updated_item else item.version,
             }
         )
     return RedirectResponse(url=f"/review/{release_id}", status_code=303)

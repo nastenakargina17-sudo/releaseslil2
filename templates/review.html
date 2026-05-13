@@ -522,6 +522,42 @@
       border: 1px solid rgba(255, 200, 4, 0.28);
     }
 
+    .bulk-action-panel {
+      position: fixed;
+      right: 18px;
+      bottom: 18px;
+      z-index: 65;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      width: min(420px, calc(100vw - 24px));
+      padding: 12px 14px;
+      border-radius: var(--radius-lg);
+      background: rgba(255, 255, 255, 0.97);
+      border: 1px solid rgba(255, 200, 4, 0.36);
+      box-shadow: var(--shadow);
+    }
+
+    .bulk-action-panel[hidden] {
+      display: none;
+    }
+
+    .bulk-select {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      width: 34px;
+      height: 34px;
+      border-radius: 999px;
+      border: 1px solid rgba(122, 133, 167, 0.24);
+      background: rgba(255, 255, 255, 0.86);
+    }
+
+    body.is-bulk-selecting .bulk-select {
+      display: inline-flex;
+    }
+
     .button-save {
       background: linear-gradient(135deg, rgba(201, 208, 229, 0.62), rgba(239, 239, 239, 0.95));
       color: var(--navy-bright);
@@ -855,12 +891,8 @@
           {% endfor %}
         </div>
         <div class="bulk-bar">
-          <label class="checkbox">
-            <input type="checkbox" data-select-visible>
-            Выбрать видимые задачи
-          </label>
-          <span class="helper-text" data-selection-count>Выбрано задач: 0</span>
-          <button type="button" class="button button-subtle" data-bulk-exclude disabled>Исключить выбранные из релиза</button>
+          <button type="button" class="button button-subtle" data-bulk-mode-toggle>Массово исключить из релиза</button>
+          <span class="helper-text">В режиме выбора отметьте несколько карточек и подтвердите исключение.</span>
         </div>
       </div>
     </section>
@@ -952,9 +984,8 @@
             <div class="section-head">
               <div class="section-copy">
                 <div class="meta-grid">
-                  <label class="checkbox">
+                  <label class="bulk-select" aria-label="Выбрать задачу для массового исключения">
                     <input type="checkbox" data-item-select>
-                    Выбрать
                   </label>
                   <span class="item-pill" data-item-type-pill>{{ item_type_labels[item.type] }}</span>
                   <span class="mini-pill">Модуль: {{ item.module }}</span>
@@ -975,15 +1006,23 @@
                     Здесь формируем итоговую формулировку для дайджеста: ясный заголовок, описание ценности и правильную категорию.
                   {% endif %}
                 </p>
-                {% if item.grouping_mode.value == "epic_group" %}
-                  <button
-                    type="button"
-                    class="button button-subtle"
-                    data-split-item
-                    data-split-url="/review/{{ release.id }}/items/{{ item.id }}/split"
-                  >
-                    Разделить на задачи
-                  </button>
+                {% if item.grouping_mode.value == "epic_group" and item.source_item_ids|length > 1 %}
+                  <div class="action-buttons">
+                    <button
+                      type="button"
+                      class="button button-subtle"
+                      data-split-item
+                      data-split-url="/review/{{ release.id }}/items/{{ item.id }}/split"
+                    >
+                      Разделить на задачи
+                    </button>
+                    <span class="tooltip-wrap">
+                      <span class="info-dot" tabindex="0">i</span>
+                      <span class="tooltip-text">
+                        Разделяет сгруппированный пункт эпика на отдельные карточки по исходным задачам трекера. Описания не генерируются автоматически: ревьюер заполнит их вручную.
+                      </span>
+                    </span>
+                  </div>
                 {% endif %}
               </div>
               <span class="status-pill status-{{ item.status.value }}" data-status-pill>{{ status_labels[item.status] }}</span>
@@ -1157,9 +1196,8 @@
                 <div class="section-head">
                   <div class="section-copy">
                     <div class="meta-grid">
-                      <label class="checkbox">
+                      <label class="bulk-select" aria-label="Выбрать задачу для массового исключения">
                         <input type="checkbox" data-item-select>
-                        Выбрать
                       </label>
                       <span class="item-pill">{{ item_type_labels[item.type] }}</span>
                       <span class="mini-pill">Модуль: {{ item.module }}</span>
@@ -1230,6 +1268,15 @@
     <button type="button" class="button" data-scroll-top aria-label="Наверх">↑</button>
     <button type="button" class="button" data-scroll-bottom aria-label="Вниз">↓</button>
   </div>
+  <div class="bulk-action-panel" data-bulk-action-panel hidden>
+    <label class="checkbox">
+      <input type="checkbox" data-select-visible>
+      Выбрать видимые
+    </label>
+    <span class="helper-text" data-selection-count>Выбрано задач: 0</span>
+    <button type="button" class="button button-subtle" data-bulk-cancel>Отмена</button>
+    <button type="button" class="button button-dark" data-bulk-exclude disabled>Исключить</button>
+  </div>
   <div class="toast-stack" id="toast-stack" aria-live="polite" aria-atomic="true"></div>
 
   <script>
@@ -1249,6 +1296,9 @@
       const selectionCount = document.querySelector("[data-selection-count]");
       const selectVisibleToggle = document.querySelector("[data-select-visible]");
       const bulkExcludeButton = document.querySelector("[data-bulk-exclude]");
+      const bulkModeToggle = document.querySelector("[data-bulk-mode-toggle]");
+      const bulkCancelButton = document.querySelector("[data-bulk-cancel]");
+      const bulkActionPanel = document.querySelector("[data-bulk-action-panel]");
       const lockClaims = new Map();
       const uploadLimits = {
         image: {{ media_limits.image_mb }} * 1024 * 1024,
@@ -1283,6 +1333,7 @@
             return;
           }
           if (element.type !== "file") {
+            element.dataset.defaultValue = element.value;
             element.defaultValue = element.value;
           }
         });
@@ -1305,6 +1356,29 @@
       };
 
       const selectedItemCards = () => itemCards.filter((card) => card.querySelector("[data-item-select]")?.checked);
+
+      const setBulkMode = (enabled) => {
+        document.body.classList.toggle("is-bulk-selecting", enabled);
+        if (bulkActionPanel) {
+          bulkActionPanel.hidden = !enabled;
+        }
+        if (bulkModeToggle) {
+          bulkModeToggle.disabled = enabled;
+          bulkModeToggle.textContent = enabled ? "Режим массового исключения включен" : "Массово исключить из релиза";
+        }
+        if (!enabled) {
+          itemCards.forEach((card) => {
+            const checkbox = card.querySelector("[data-item-select]");
+            if (checkbox) {
+              checkbox.checked = false;
+            }
+          });
+          if (selectVisibleToggle) {
+            selectVisibleToggle.checked = false;
+          }
+        }
+        updateSelectionState();
+      };
 
       const updateSelectionState = () => {
         const selectedCount = selectedItemCards().length;
@@ -1421,7 +1495,7 @@
           if (element.type === "checkbox" || element.type === "radio") {
             return element.checked !== element.defaultChecked;
           }
-          return element.value !== element.defaultValue;
+          return element.value !== (element.dataset.defaultValue ?? element.defaultValue);
         });
 
         saveButton.disabled = !isDirty;
@@ -1754,6 +1828,8 @@
       };
 
       reviewForms.forEach((form) => {
+        setFormDefaults(form);
+
         form.addEventListener("focusin", () => {
           claimLock(form);
         });
@@ -1808,6 +1884,12 @@
             if (versionInput && payload.version) {
               versionInput.value = payload.version;
             }
+            if (card && payload.status) {
+              card.dataset.itemStatus = payload.status;
+              if (payload.status === "{{ excluded_status }}") {
+                card.classList.add("is-excluded");
+              }
+            }
             setFormDefaults(form);
             markDirtyState(form);
             releaseLock(form);
@@ -1857,6 +1939,11 @@
               body: formData,
             });
             renderMediaGallery(card, payload.media_paths || []);
+            const versionInput = card.querySelector("[data-object-version]");
+            if (versionInput && payload.version) {
+              versionInput.value = payload.version;
+              versionInput.defaultValue = payload.version;
+            }
             fileInput.value = "";
             showToast(payload.message || "Файл загружен.");
           } catch (error) {
@@ -1889,6 +1976,11 @@
             body: new FormData(form),
           });
           renderMediaGallery(card, payload.media_paths || []);
+          const versionInput = card.querySelector("[data-object-version]");
+          if (versionInput && payload.version) {
+            versionInput.value = payload.version;
+            versionInput.defaultValue = payload.version;
+          }
           showToast(payload.message || "Файл удален.");
         } catch (error) {
           showToast(error.message, "error");
@@ -1986,11 +2078,20 @@
           }
           applyFilter();
           showToast(payload.message || "Выбранные задачи исключены.");
+          window.setTimeout(() => window.location.reload(), 700);
         } catch (error) {
           showToast(error.message, "error");
         } finally {
           updateSelectionState();
         }
+      });
+
+      bulkModeToggle?.addEventListener("click", () => {
+        setBulkMode(true);
+      });
+
+      bulkCancelButton?.addEventListener("click", () => {
+        setBulkMode(false);
       });
 
       document.querySelector("[data-scroll-top]")?.addEventListener("click", () => {

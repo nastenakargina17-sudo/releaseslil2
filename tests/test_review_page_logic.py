@@ -228,6 +228,24 @@ class DigestGuardTests(unittest.TestCase):
         self.assertEqual(self.storage.get_item("item-1").status, ItemStatus.APPROVED)
         self.assertGreater(response.json()["version"], item.version)
 
+    def test_item_can_be_excluded_without_status_field(self) -> None:
+        item = self.storage.get_item("item-1")
+        response = self.client.post(
+            "/review/2026-04/items/item-1",
+            data={
+                "title": "Feature title",
+                "description": "Feature description",
+                "category": "",
+                "exclude_from_release": "on",
+                "object_version": str(item.version),
+            },
+            headers={"X-Requested-With": "XMLHttpRequest"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["status"], ItemStatus.EXCLUDED.value)
+        self.assertEqual(self.storage.get_item("item-1").status, ItemStatus.EXCLUDED)
+
     def test_item_save_rejects_stale_version(self) -> None:
         item = self.storage.get_item("item-1")
         self.storage.update_item(
@@ -422,6 +440,51 @@ class DigestGuardTests(unittest.TestCase):
         self.assertEqual([item.title for item in items], ["First tracker task", "Second tracker task"])
         self.assertEqual([item.grouping_mode for item in items], [GroupingMode.SINGLE_TASK, GroupingMode.SINGLE_TASK])
 
+    def test_split_button_only_renders_for_multi_task_epic_items(self) -> None:
+        self.storage.replace_release_items(
+            "2026-04",
+            [
+                DigestItem(
+                    id="single-source-epic",
+                    release_id="2026-04",
+                    source_item_ids=["DEV-10"],
+                    title="Single source epic",
+                    description="Epic description",
+                    module="Core",
+                    type=ItemType.NEW_FEATURE,
+                    category=ValueCategory.DAILY_WORK_CONVENIENCE,
+                    status=ItemStatus.DRAFT,
+                    tracker_urls=["https://tracker.yandex.ru/DEV-10"],
+                    grouping_mode=GroupingMode.EPIC_GROUP,
+                    source_item_titles=["First tracker task"],
+                    source_item_descriptions=["First description"],
+                    source_item_modules=["Core"],
+                ),
+                DigestItem(
+                    id="multi-source-epic",
+                    release_id="2026-04",
+                    source_item_ids=["DEV-11", "DEV-12"],
+                    title="Multi source epic",
+                    description="Epic description",
+                    module="Core",
+                    type=ItemType.NEW_FEATURE,
+                    category=ValueCategory.DAILY_WORK_CONVENIENCE,
+                    status=ItemStatus.DRAFT,
+                    tracker_urls=["https://tracker.yandex.ru/DEV-11", "https://tracker.yandex.ru/DEV-12"],
+                    grouping_mode=GroupingMode.EPIC_GROUP,
+                    source_item_titles=["Second tracker task", "Third tracker task"],
+                    source_item_descriptions=["Second description", "Third description"],
+                    source_item_modules=["Core", "Core"],
+                ),
+            ],
+        )
+
+        response = self.client.get("/review/2026-04")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn('/items/single-source-epic/split', response.text)
+        self.assertIn('/items/multi-source-epic/split', response.text)
+
     def test_upload_validates_media_type_and_size(self) -> None:
         response = self.client.post(
             "/review/2026-04/items/item-1/image",
@@ -433,6 +496,7 @@ class DigestGuardTests(unittest.TestCase):
         self.assertIn("Поддерживаются JPG, PNG, WEBP, GIF, MP4 и WEBM.", response.text)
 
     def test_uploaded_media_can_be_deleted(self) -> None:
+        initial_version = self.storage.get_item("item-1").version
         upload_response = self.client.post(
             "/review/2026-04/items/item-1/image",
             files={"image": ("preview.webp", io.BytesIO(b"fake-image"), "image/webp")},
@@ -440,6 +504,7 @@ class DigestGuardTests(unittest.TestCase):
         )
 
         self.assertEqual(upload_response.status_code, 200)
+        self.assertGreater(upload_response.json()["version"], initial_version)
         media_path = upload_response.json()["media_paths"][0]
         stored_path = self.main.UPLOADS_DIR / Path(media_path).name
         self.assertTrue(stored_path.exists())
@@ -452,6 +517,7 @@ class DigestGuardTests(unittest.TestCase):
 
         self.assertEqual(delete_response.status_code, 200)
         self.assertEqual(delete_response.json()["media_paths"], [])
+        self.assertGreater(delete_response.json()["version"], upload_response.json()["version"])
         self.assertFalse(stored_path.exists())
 
 
