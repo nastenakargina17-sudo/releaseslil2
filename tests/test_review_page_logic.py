@@ -260,6 +260,63 @@ class DigestGuardTests(unittest.TestCase):
         self.assertEqual(loaded.published_by, "Employee")
         self.assertEqual(archive[0].release_id, "2026-04")
 
+    def test_publication_snapshot_contains_card_fields_and_copies_media(self) -> None:
+        media_source = self.config.UPLOADS_DIR / "source.png"
+        media_source.write_bytes(b"image-bytes")
+        self.storage.update_item(
+            item_id="item-1",
+            title="Feature title",
+            description="Feature description",
+            category=ValueCategory.TIME_SAVING.value,
+            status=ItemStatus.APPROVED.value,
+            is_paid_feature=True,
+        )
+        self.storage.add_item_image("item-1", "/uploads/source.png")
+
+        from app.services.publication import build_published_digest_snapshot
+
+        release = self.storage.get_release("2026-04")
+        items = self.storage.list_items("2026-04")
+        snapshot = build_published_digest_snapshot(
+            release=release,
+            items=items,
+            published_by="Employee",
+            uploads_dir=self.config.UPLOADS_DIR,
+        )
+
+        first_item = snapshot.content["sections"][0]["items"][0]
+        self.assertEqual(first_item["title"], "Feature title")
+        self.assertEqual(first_item["module"], "Core")
+        self.assertEqual(first_item["value_category_label"], "Экономия времени")
+        self.assertEqual(first_item["is_paid_feature"], True)
+        self.assertEqual(len(first_item["media"]), 1)
+        self.assertTrue(first_item["media"][0]["path"].startswith("/uploads/published/2026-04/"))
+        copied_path = self.config.UPLOADS_DIR / Path(first_item["media"][0]["path"].replace("/uploads/", ""))
+        self.assertEqual(copied_path.read_bytes(), b"image-bytes")
+
+    def test_publication_snapshot_fails_when_media_file_is_missing(self) -> None:
+        self.storage.update_item(
+            item_id="item-1",
+            title="Feature title",
+            description="Feature description",
+            category=ValueCategory.TIME_SAVING.value,
+            status=ItemStatus.APPROVED.value,
+            is_paid_feature=False,
+        )
+        self.storage.add_item_image("item-1", "/uploads/missing.png")
+
+        from app.services.publication import PublicationError, build_published_digest_snapshot
+
+        release = self.storage.get_release("2026-04")
+        items = self.storage.list_items("2026-04")
+        with self.assertRaises(PublicationError):
+            build_published_digest_snapshot(
+                release=release,
+                items=items,
+                published_by="Employee",
+                uploads_dir=self.config.UPLOADS_DIR,
+            )
+
     def test_digest_route_rejects_non_final_items(self) -> None:
         response = self.client.get("/digest/2026-04")
 
