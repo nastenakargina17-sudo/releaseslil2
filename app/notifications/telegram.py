@@ -124,10 +124,14 @@ def build_release_list_keyboard(entries: list[tuple[str, str]]) -> dict[str, Any
 
 
 def build_start_keyboard() -> dict[str, Any]:
+    return build_bot_menu_keyboard()
+
+
+def build_bot_menu_keyboard() -> dict[str, Any]:
     return {
-        "inline_keyboard": [
-            [{"text": "Показать список релизов", "callback_data": "list_releases"}]
-        ]
+        "keyboard": [[{"text": "Показать релизы"}]],
+        "resize_keyboard": True,
+        "is_persistent": True,
     }
 
 

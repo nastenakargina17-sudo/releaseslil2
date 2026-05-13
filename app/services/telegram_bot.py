@@ -3,6 +3,7 @@ from app.auth import build_review_entry_url
 from app.config import get_app_settings, get_confluence_settings, get_telegram_settings
 from app.notifications.telegram import (
     TelegramNotifier,
+    build_bot_menu_keyboard,
     build_bot_welcome_message,
     build_release_list_keyboard,
     build_release_list_message,
@@ -41,6 +42,10 @@ class TelegramBotService:
                 chat_id=chat_id,
                 reply_markup=reply_markup,
             )
+            return
+
+        if text.lower() in {"показать релизы", "/releases", "релизы"}:
+            self._send_release_list(chat_id)
 
     def handle_callback_query(self, callback_query: dict) -> None:
         callback_query_id = str(callback_query.get("id") or "")
@@ -52,13 +57,7 @@ class TelegramBotService:
 
         if data == "list_releases":
             self.notifier.answer_callback_query(callback_query_id)
-            releases = self.confluence.list_releases()
-            keyboard_entries = [(entry.release_id, entry.release_date) for entry in releases]
-            self.notifier.send_message(
-                build_release_list_message(),
-                chat_id=chat_id,
-                reply_markup=build_release_list_keyboard(keyboard_entries),
-            )
+            self._send_release_list(chat_id)
             return
 
         if data.startswith("release:"):
@@ -80,4 +79,14 @@ class TelegramBotService:
             self.notifier.send_message(
                 build_release_review_message(release_id, release_date, review_url),
                 chat_id=chat_id,
+                reply_markup=build_bot_menu_keyboard(),
             )
+
+    def _send_release_list(self, chat_id: str) -> None:
+        releases = self.confluence.list_releases()
+        keyboard_entries = [(entry.release_id, entry.release_date) for entry in releases]
+        self.notifier.send_message(
+            build_release_list_message(),
+            chat_id=chat_id,
+            reply_markup=build_release_list_keyboard(keyboard_entries),
+        )
