@@ -8,7 +8,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 from fastapi.responses import Response
 
-from app.models import DigestItem, DigestRelease, GroupingMode, ItemStatus, ItemType, SourceItem, SummaryStatus
+from app.models import DigestItem, DigestRelease, GroupingMode, ItemStatus, ItemType, SourceItem, SummaryStatus, ValueCategory
 from app.session import SESSION_COOKIE_NAME, save_session
 
 
@@ -354,6 +354,73 @@ class DigestGuardTests(unittest.TestCase):
         self.assertEqual(item.type, ItemType.CHANGE)
         self.assertEqual(item.status, ItemStatus.DRAFT)
         self.assertEqual(item.description, "")
+
+    def test_item_type_can_change_between_feature_and_change(self) -> None:
+        item = self.storage.get_item("item-1")
+        response = self.client.post(
+            "/review/2026-04/items/item-1",
+            data={
+                "title": "Feature title",
+                "description": "Feature description",
+                "category": "",
+                "status": "draft",
+                "item_type": "change",
+                "object_version": str(item.version),
+            },
+            headers={"X-Requested-With": "XMLHttpRequest"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["item_type"], ItemType.CHANGE.value)
+        self.assertEqual(self.storage.get_item("item-1").type, ItemType.CHANGE)
+
+    def test_bulk_exclude_items(self) -> None:
+        response = self.client.post(
+            "/review/2026-04/bulk-exclude",
+            content="item_ids=item-1&item_ids=item-2",
+            headers={
+                "X-Requested-With": "XMLHttpRequest",
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["status"], ItemStatus.EXCLUDED.value)
+        self.assertEqual(self.storage.get_item("item-1").status, ItemStatus.EXCLUDED)
+        self.assertEqual(self.storage.get_item("item-2").status, ItemStatus.EXCLUDED)
+
+    def test_epic_item_can_be_split_into_source_tasks(self) -> None:
+        self.storage.replace_release_items(
+            "2026-04",
+            [
+                DigestItem(
+                    id="epic-item",
+                    release_id="2026-04",
+                    source_item_ids=["DEV-10", "DEV-11"],
+                    title="Epic title",
+                    description="Epic description",
+                    module="Core",
+                    type=ItemType.NEW_FEATURE,
+                    category=ValueCategory.DAILY_WORK_CONVENIENCE,
+                    status=ItemStatus.DRAFT,
+                    tracker_urls=["https://tracker.yandex.ru/DEV-10", "https://tracker.yandex.ru/DEV-11"],
+                    grouping_mode=GroupingMode.EPIC_GROUP,
+                    source_item_titles=["First tracker task", "Second tracker task"],
+                    source_item_descriptions=["First description", "Second description"],
+                    source_item_modules=["Core", "Reports"],
+                ),
+            ],
+        )
+
+        response = self.client.post(
+            "/review/2026-04/items/epic-item/split",
+            headers={"X-Requested-With": "XMLHttpRequest"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        items = self.storage.list_items("2026-04")
+        self.assertEqual([item.title for item in items], ["First tracker task", "Second tracker task"])
+        self.assertEqual([item.grouping_mode for item in items], [GroupingMode.SINGLE_TASK, GroupingMode.SINGLE_TASK])
 
     def test_upload_validates_media_type_and_size(self) -> None:
         response = self.client.post(

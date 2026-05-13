@@ -65,6 +65,9 @@ class DigestItem:
     image_paths: List[str] = field(default_factory=list)
     tracker_urls: List[str] = field(default_factory=list)
     grouping_mode: GroupingMode = GroupingMode.SINGLE_TASK
+    source_item_titles: List[str] = field(default_factory=list)
+    source_item_descriptions: List[str] = field(default_factory=list)
+    source_item_modules: List[str] = field(default_factory=list)
     version: int = 1
     updated_at: str = ""
 

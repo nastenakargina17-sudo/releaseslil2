@@ -121,6 +121,9 @@ def _build_epic_digest_item(release_id: str, epic_id: str, epic_items: List[Sour
         status=default_item_status(item_type),
         tracker_urls=[item.url for item in epic_items],
         grouping_mode=GroupingMode.EPIC_GROUP,
+        source_item_titles=[item.title for item in epic_items],
+        source_item_descriptions=[item.description for item in epic_items],
+        source_item_modules=[item.module for item in epic_items],
     )
 
 
@@ -148,6 +151,9 @@ def _build_single_digest_item(release_id: str, source_item: SourceItem) -> Diges
         status=default_item_status(source_item.type),
         tracker_urls=[source_item.url],
         grouping_mode=GroupingMode.SINGLE_TASK,
+        source_item_titles=[source_item.title],
+        source_item_descriptions=[source_item.description],
+        source_item_modules=[source_item.module],
     )
 
 

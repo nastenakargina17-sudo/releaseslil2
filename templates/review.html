@@ -171,19 +171,46 @@
     }
 
     .action-bar {
-      position: sticky;
-      top: 14px;
-      z-index: 20;
       margin-top: 18px;
       padding: 18px 20px;
       background:
         linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(239, 239, 239, 0.92));
     }
 
+    .filters-panel {
+      position: sticky;
+      top: 14px;
+      z-index: 20;
+      margin-top: 18px;
+      padding: 14px 16px;
+      border: 1px solid rgba(122, 133, 167, 0.22);
+      border-radius: var(--radius-xl);
+      background: rgba(255, 255, 255, 0.96);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(12px);
+    }
+
+    .filters-panel.is-collapsed .filters-body {
+      display: none;
+    }
+
+    .filters-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .filters-body {
+      display: grid;
+      gap: 12px;
+      margin-top: 12px;
+    }
+
     .action-row { justify-content: space-between; }
 
     .filter-row {
-      margin-top: 14px;
       display: flex;
       gap: 10px;
       flex-wrap: wrap;
@@ -465,6 +492,36 @@
       color: #fff;
     }
 
+    .type-filter {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      border-radius: 999px;
+      background: rgba(201, 208, 229, 0.34);
+      color: var(--navy-bright);
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .type-filter input {
+      accent-color: var(--brand);
+      margin: 0;
+    }
+
+    .bulk-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      padding: 12px 14px;
+      border-radius: var(--radius-md);
+      background: rgba(255, 200, 4, 0.12);
+      border: 1px solid rgba(255, 200, 4, 0.28);
+    }
+
     .button-save {
       background: linear-gradient(135deg, rgba(201, 208, 229, 0.62), rgba(239, 239, 239, 0.95));
       color: var(--navy-bright);
@@ -552,6 +609,71 @@
       line-height: 1.5;
     }
 
+    .tooltip-wrap {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+    }
+
+    .info-dot {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 22px;
+      height: 22px;
+      border-radius: 999px;
+      border: 1px solid rgba(21, 51, 92, 0.24);
+      background: rgba(21, 51, 92, 0.07);
+      color: var(--navy-bright);
+      font-size: 13px;
+      font-weight: 800;
+      cursor: help;
+    }
+
+    .tooltip-text {
+      position: absolute;
+      left: 0;
+      bottom: calc(100% + 8px);
+      width: min(320px, calc(100vw - 48px));
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: var(--navy-deep);
+      color: #fff;
+      font-size: 12px;
+      line-height: 1.45;
+      box-shadow: 0 12px 28px rgba(7, 16, 31, 0.22);
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(4px);
+      transition: opacity 0.16s ease, transform 0.16s ease;
+      z-index: 30;
+    }
+
+    .tooltip-wrap:hover .tooltip-text,
+    .tooltip-wrap:focus-within .tooltip-text {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .scroll-jump {
+      position: fixed;
+      right: 18px;
+      top: 50%;
+      transform: translateY(-50%);
+      z-index: 55;
+      display: grid;
+      gap: 8px;
+    }
+
+    .scroll-jump .button {
+      width: 42px;
+      height: 42px;
+      padding: 0;
+      border-radius: 999px;
+      background: rgba(7, 16, 31, 0.9);
+      color: #fff;
+    }
+
     .upload-hint strong {
       color: var(--navy-bright);
     }
@@ -587,7 +709,8 @@
       background: linear-gradient(135deg, rgba(125, 22, 33, 0.97), rgba(193, 43, 56, 0.96));
     }
 
-    .item-card[hidden] {
+    .item-card[hidden],
+    .summary-card[hidden] {
       display: none;
     }
 
@@ -696,17 +819,50 @@
           </form>
         </div>
       </div>
-      <div class="filter-row" data-filter-bar>
-        <span class="filter-label">Быстрый фильтр:</span>
-        <button type="button" class="button button-subtle button-filter is-active" data-filter-value="all">Все пункты</button>
-        <button type="button" class="button button-subtle button-filter" data-filter-value="needs_review">Требуют ревью</button>
-        <button type="button" class="button button-subtle button-filter" data-filter-value="release_candidate">Задачи из "Нет"</button>
-        <button type="button" class="button button-subtle button-filter" data-filter-value="draft">Черновики</button>
-        <button type="button" class="button button-subtle button-filter" data-filter-value="reviewed">На проверке</button>
-        <button type="button" class="button button-subtle button-filter" data-filter-value="approved">Подтверждено</button>
-        <button type="button" class="button button-subtle button-filter" data-filter-value="excluded">Исключено</button>
-      </div>
       <div class="error-banner" id="digest-error-banner" hidden></div>
+    </section>
+
+    <section class="filters-panel is-collapsed" data-filters-panel>
+      <div class="filters-head">
+        <div class="action-copy">
+          <strong>Фильтры ревью</strong>
+          <small data-filter-summary>Статус: Черновик; типы: Изменение, Новая фича</small>
+        </div>
+        <button type="button" class="button button-subtle" data-filter-toggle>Развернуть фильтры</button>
+      </div>
+      <div class="filters-body">
+        <div class="filter-row" data-filter-bar>
+          <span class="filter-label">Фильтры по статусам:</span>
+          <button type="button" class="button button-subtle button-filter" data-filter-value="all">Все пункты</button>
+          <button type="button" class="button button-subtle button-filter" data-filter-value="needs_review">Требуют ревью</button>
+          <button type="button" class="button button-subtle button-filter" data-filter-value="release_candidate">Задачи из "Нет"</button>
+          <button type="button" class="button button-subtle button-filter is-active" data-filter-value="draft">Черновики</button>
+          <button type="button" class="button button-subtle button-filter" data-filter-value="approved">Подтверждено</button>
+          <button type="button" class="button button-subtle button-filter" data-filter-value="excluded">Исключено</button>
+        </div>
+        <div class="filter-row" data-type-filter-bar>
+          <span class="filter-label">Фильтры по типам задач:</span>
+          {% for item_type in [ItemType.NEW_FEATURE, ItemType.CHANGE, ItemType.BUGFIX, ItemType.TECHNICAL_IMPROVEMENT, ItemType.RELEASE_CANDIDATE] %}
+            <label class="type-filter">
+              <input
+                type="checkbox"
+                value="{{ item_type.value }}"
+                data-type-filter
+                {% if item_type in [ItemType.NEW_FEATURE, ItemType.CHANGE] %}checked{% endif %}
+              >
+              {{ item_type_labels[item_type] }}
+            </label>
+          {% endfor %}
+        </div>
+        <div class="bulk-bar">
+          <label class="checkbox">
+            <input type="checkbox" data-select-visible>
+            Выбрать видимые задачи
+          </label>
+          <span class="helper-text" data-selection-count>Выбрано задач: 0</span>
+          <button type="button" class="button button-subtle" data-bulk-exclude disabled>Исключить выбранные из релиза</button>
+        </div>
+      </div>
     </section>
 
     {% if flash == "review_notified" %}
@@ -796,7 +952,11 @@
             <div class="section-head">
               <div class="section-copy">
                 <div class="meta-grid">
-                  <span class="item-pill">{{ item_type_labels[item.type] }}</span>
+                  <label class="checkbox">
+                    <input type="checkbox" data-item-select>
+                    Выбрать
+                  </label>
+                  <span class="item-pill" data-item-type-pill>{{ item_type_labels[item.type] }}</span>
                   <span class="mini-pill">Модуль: {{ item.module }}</span>
                   {% if item.is_paid_feature %}
                     <span class="mini-pill">Платная фича</span>
@@ -815,6 +975,16 @@
                     Здесь формируем итоговую формулировку для дайджеста: ясный заголовок, описание ценности и правильную категорию.
                   {% endif %}
                 </p>
+                {% if item.grouping_mode.value == "epic_group" %}
+                  <button
+                    type="button"
+                    class="button button-subtle"
+                    data-split-item
+                    data-split-url="/review/{{ release.id }}/items/{{ item.id }}/split"
+                  >
+                    Разделить на задачи
+                  </button>
+                {% endif %}
               </div>
               <span class="status-pill status-{{ item.status.value }}" data-status-pill>{{ status_labels[item.status] }}</span>
             </div>
@@ -865,6 +1035,16 @@
                     {% endfor %}
                   </select>
                 </div>
+
+                {% if item.type in [ItemType.NEW_FEATURE, ItemType.CHANGE] %}
+                  <div class="field-group">
+                    <label for="item_type-{{ item.id }}">Тип задачи</label>
+                    <select name="item_type" id="item_type-{{ item.id }}" data-item-type-select>
+                      <option value="new_feature" {% if item.type.value == "new_feature" %}selected{% endif %}>Новая фича</option>
+                      <option value="change" {% if item.type.value == "change" %}selected{% endif %}>Изменение</option>
+                    </select>
+                  </div>
+                {% endif %}
               </div>
 
               <div class="toggle-row">
@@ -887,28 +1067,33 @@
                 {% endfor %}
               </div>
 
-              <div>
-                <button type="submit" class="button button-save" data-save-button disabled>Сохранить изменения</button>
-              </div>
-            </form>
-
-            <form method="post" action="/review/{{ release.id }}/items/{{ item.id }}/image" enctype="multipart/form-data" class="grid upload-row" style="margin-top: 18px;">
-              <div class="field-group" style="flex: 1 1 300px;">
-                <label for="image-{{ item.id }}">Добавить изображение или видео</label>
-                <input
-                  type="file"
-                  name="image"
-                  id="image-{{ item.id }}"
-                  accept=".jpg,.jpeg,.png,.webp,.gif,.mp4,.webm,image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm"
-                  data-media-input
-                >
-                <div class="upload-hint">
-                  <strong>Ограничения:</strong> JPG/JPEG, PNG, WEBP до {{ media_limits.image_mb }} МБ; GIF до {{ media_limits.gif_mb }} МБ; MP4 и WEBM до {{ media_limits.video_mb }} МБ.
-                  Для картинок включено автосжатие и конвертация в WEBP перед загрузкой, чтобы страница работала быстрее.
+              <div class="upload-row" data-upload-row data-upload-url="/review/{{ release.id }}/items/{{ item.id }}/image">
+                <div class="field-group" style="flex: 1 1 300px;">
+                  <label for="image-{{ item.id }}">
+                    Добавить изображение или видео
+                    <span class="tooltip-wrap">
+                      <span class="info-dot" tabindex="0">i</span>
+                      <span class="tooltip-text">
+                        JPG/JPEG, PNG, WEBP до {{ media_limits.image_mb }} МБ; GIF до {{ media_limits.gif_mb }} МБ; MP4 и WEBM до {{ media_limits.video_mb }} МБ.
+                        Для картинок включено автосжатие и конвертация в WEBP.
+                      </span>
+                    </span>
+                  </label>
+                  <input
+                    type="file"
+                    name="image"
+                    id="image-{{ item.id }}"
+                    accept=".jpg,.jpeg,.png,.webp,.gif,.mp4,.webm,image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm"
+                    data-media-input
+                  >
+                </div>
+                <div style="align-self: end;">
+                  <button type="button" class="button button-subtle" data-upload-button>Загрузить файл</button>
                 </div>
               </div>
-              <div style="align-self: end;">
-                <button type="submit" class="button button-subtle">Загрузить изображение</button>
+
+              <div>
+                <button type="submit" class="button button-save" data-save-button disabled>Сохранить изменения</button>
               </div>
             </form>
 
@@ -955,9 +1140,9 @@
             <div class="section-head">
               <div class="section-copy">
                 <h2>Задачи из "Нет"</h2>
-                <p>Эти задачи пришли из трекера со значением <strong>inTheReleaseDescription = "Нет"</strong>. Мы не генерируем им описание автоматически и не включаем в релиз, пока ревьюер явно не примет решение.</p>
+                <p>Эти задачи пришли из трекера со значением <strong>В описание релиза = "Нет"</strong>. Мы не генерируем им описание автоматически и не включаем в релиз, пока ревьюер явно не примет решение.</p>
               </div>
-              <span class="mini-pill">Кандидатов: {{ candidate_items|length }}</span>
+              <span class="mini-pill">Задач: {{ candidate_items|length }}</span>
             </div>
             {% for item in candidate_items %}
               <article
@@ -972,6 +1157,10 @@
                 <div class="section-head">
                   <div class="section-copy">
                     <div class="meta-grid">
+                      <label class="checkbox">
+                        <input type="checkbox" data-item-select>
+                        Выбрать
+                      </label>
                       <span class="item-pill">{{ item_type_labels[item.type] }}</span>
                       <span class="mini-pill">Модуль: {{ item.module }}</span>
                       <span class="mini-pill">В трекере было отмечено "Нет"</span>
@@ -1037,6 +1226,10 @@
       </div>
     </div>
   </div>
+  <div class="scroll-jump" aria-label="Быстрая прокрутка">
+    <button type="button" class="button" data-scroll-top aria-label="Наверх">↑</button>
+    <button type="button" class="button" data-scroll-bottom aria-label="Вниз">↓</button>
+  </div>
   <div class="toast-stack" id="toast-stack" aria-live="polite" aria-atomic="true"></div>
 
   <script>
@@ -1046,9 +1239,16 @@
       const summaryCard = document.querySelector("[data-summary-card]");
       const toastStack = document.getElementById("toast-stack");
       const presenceList = document.querySelector("[data-presence-list]");
+      const filtersPanel = document.querySelector("[data-filters-panel]");
+      const filterToggle = document.querySelector("[data-filter-toggle]");
+      const filterSummary = document.querySelector("[data-filter-summary]");
       const filterButtons = Array.from(document.querySelectorAll("[data-filter-value]"));
+      const typeFilters = Array.from(document.querySelectorAll("[data-type-filter]"));
       const itemCards = Array.from(document.querySelectorAll("[data-item-card]"));
       const reviewForms = Array.from(document.querySelectorAll("[data-review-form]"));
+      const selectionCount = document.querySelector("[data-selection-count]");
+      const selectVisibleToggle = document.querySelector("[data-select-visible]");
+      const bulkExcludeButton = document.querySelector("[data-bulk-exclude]");
       const lockClaims = new Map();
       const uploadLimits = {
         image: {{ media_limits.image_mb }} * 1024 * 1024,
@@ -1089,9 +1289,40 @@
       };
 
       const activeFilter = () => document.querySelector(".button-filter.is-active")?.dataset.filterValue || "all";
+      const selectedTypeValues = () => typeFilters.filter((input) => input.checked).map((input) => input.value);
+      const selectedTypeLabels = () => typeFilters
+        .filter((input) => input.checked)
+        .map((input) => input.closest(".type-filter")?.textContent.trim() || input.value);
+
+      const updateFilterSummary = () => {
+        if (!filterSummary) {
+          return;
+        }
+        const statusButton = document.querySelector(".button-filter.is-active");
+        const statusLabel = statusButton?.textContent.trim() || "Все пункты";
+        const typeLabel = selectedTypeLabels().join(", ") || "все типы";
+        filterSummary.textContent = `Статус: ${statusLabel}; типы: ${typeLabel}`;
+      };
+
+      const selectedItemCards = () => itemCards.filter((card) => card.querySelector("[data-item-select]")?.checked);
+
+      const updateSelectionState = () => {
+        const selectedCount = selectedItemCards().length;
+        if (selectionCount) {
+          selectionCount.textContent = `Выбрано задач: ${selectedCount}`;
+        }
+        if (bulkExcludeButton) {
+          bulkExcludeButton.disabled = selectedCount === 0;
+        }
+        if (selectVisibleToggle) {
+          const visibleCards = itemCards.filter((card) => !card.hidden);
+          selectVisibleToggle.checked = visibleCards.length > 0 && visibleCards.every((card) => card.querySelector("[data-item-select]")?.checked);
+        }
+      };
 
       const applyFilter = () => {
         const currentFilter = activeFilter();
+        const activeTypes = selectedTypeValues();
         if (summaryCard) {
           const summaryStatus = summaryCard.dataset.summaryStatus || "";
           summaryCard.hidden = !(
@@ -1105,13 +1336,17 @@
           const status = getCardStatus(card);
           const bucket = card.dataset.itemBucket || "primary";
           const itemType = card.dataset.itemType || "";
-          const shouldShow =
+          const matchesStatus =
             currentFilter === "all"
             || (currentFilter === "release_candidate" && itemType === "release_candidate")
             || (currentFilter === "needs_review" && status !== "{{ approved_status }}" && status !== "{{ excluded_status }}")
             || (bucket === "primary" && currentFilter === status);
+          const matchesType = activeTypes.length === 0 || activeTypes.includes(itemType);
+          const shouldShow = card.classList.contains("is-dirty") || (matchesStatus && matchesType);
           card.hidden = !shouldShow;
         });
+        updateFilterSummary();
+        updateSelectionState();
       };
 
       const updateExcludedState = (form) => {
@@ -1141,7 +1376,6 @@
           statusPill.textContent = selectedLabel;
           statusPill.className = `status-pill status-${statusSelect.value}`;
         }
-        applyFilter();
       };
 
       const updateCardStatus = (form) => {
@@ -1159,7 +1393,6 @@
         card.dataset.itemStatus = statusSelect.value;
         statusPill.textContent = statusSelect.options[statusSelect.selectedIndex]?.textContent || "";
         statusPill.className = `status-pill status-${statusSelect.value}`;
-        applyFilter();
       };
 
       const updateSummaryStatus = (form) => {
@@ -1172,7 +1405,6 @@
         summaryCard.dataset.summaryStatus = select.value;
         pill.textContent = select.options[select.selectedIndex]?.textContent || "";
         pill.className = `status-pill status-${select.value}`;
-        applyFilter();
       };
 
       const markDirtyState = (form) => {
@@ -1195,6 +1427,7 @@
         saveButton.disabled = !isDirty;
         saveButton.classList.toggle("is-dirty", isDirty);
         card.classList.toggle("is-dirty", isDirty);
+        applyFilter();
       };
 
       const renderMediaGallery = (card, mediaPaths) => {
@@ -1562,6 +1795,15 @@
               window.location.reload();
               return;
             }
+            const card = form.closest("[data-item-card]");
+            if (card && payload.item_type) {
+              card.dataset.itemType = payload.item_type;
+              const typePill = card.querySelector("[data-item-type-pill]");
+              const typeSelect = form.querySelector("[data-item-type-select]");
+              if (typePill && typeSelect) {
+                typePill.textContent = typeSelect.options[typeSelect.selectedIndex]?.textContent || typePill.textContent;
+              }
+            }
             const versionInput = form.querySelector("[data-object-version]");
             if (versionInput && payload.version) {
               versionInput.value = payload.version;
@@ -1590,13 +1832,14 @@
       window.setInterval(touchPresence, 15000);
       window.addEventListener("pagehide", releasePresence);
 
-      document.querySelectorAll(".upload-row").forEach((form) => {
-        form.addEventListener("submit", async (event) => {
-          event.preventDefault();
-          const fileInput = form.querySelector("[data-media-input]");
-          const submitButton = form.querySelector("button[type='submit']");
-          const card = form.closest("[data-item-card]");
-          if (!fileInput || !fileInput.files?.length || !card) {
+      document.querySelectorAll("[data-upload-row]").forEach((row) => {
+        const uploadButton = row.querySelector("[data-upload-button]");
+        uploadButton?.addEventListener("click", async () => {
+          const fileInput = row.querySelector("[data-media-input]");
+          const submitButton = row.querySelector("[data-upload-button]");
+          const card = row.closest("[data-item-card]");
+          const uploadUrl = row.dataset.uploadUrl;
+          if (!fileInput || !fileInput.files?.length || !card || !uploadUrl) {
             showToast("Сначала выберите файл для загрузки.", "error");
             return;
           }
@@ -1609,12 +1852,12 @@
             const preparedFile = await prepareUploadFile(fileInput.files[0]);
             const formData = new FormData();
             formData.set("image", preparedFile, preparedFile.name);
-            const payload = await fetchJson(form.action, {
+            const payload = await fetchJson(uploadUrl, {
               method: "POST",
               body: formData,
             });
             renderMediaGallery(card, payload.media_paths || []);
-            form.reset();
+            fileInput.value = "";
             showToast(payload.message || "Файл загружен.");
           } catch (error) {
             showToast(error.message, "error");
@@ -1675,6 +1918,100 @@
           filterButtons.forEach((item) => item.classList.remove("is-active"));
           button.classList.add("is-active");
           applyFilter();
+        });
+      });
+
+      typeFilters.forEach((input) => {
+        input.addEventListener("change", applyFilter);
+      });
+
+      filterToggle?.addEventListener("click", () => {
+        const isCollapsed = filtersPanel?.classList.toggle("is-collapsed");
+        filterToggle.textContent = isCollapsed ? "Развернуть фильтры" : "Свернуть фильтры";
+      });
+
+      itemCards.forEach((card) => {
+        card.querySelector("[data-item-select]")?.addEventListener("change", updateSelectionState);
+      });
+
+      selectVisibleToggle?.addEventListener("change", () => {
+        itemCards.forEach((card) => {
+          if (!card.hidden) {
+            const checkbox = card.querySelector("[data-item-select]");
+            if (checkbox) {
+              checkbox.checked = selectVisibleToggle.checked;
+            }
+          }
+        });
+        updateSelectionState();
+      });
+
+      bulkExcludeButton?.addEventListener("click", async () => {
+        const selectedCards = selectedItemCards();
+        if (!selectedCards.length) {
+          return;
+        }
+        const formData = new FormData();
+        selectedCards.forEach((card) => formData.append("item_ids", card.dataset.itemId));
+        bulkExcludeButton.disabled = true;
+        try {
+          const payload = await fetchJson("/review/{{ release.id }}/bulk-exclude", {
+            method: "POST",
+            body: formData,
+          });
+          selectedCards.forEach((card) => {
+            const checkbox = card.querySelector("[data-item-select]");
+            const statusPill = card.querySelector("[data-status-pill]");
+            const statusSelect = card.querySelector("[data-status-select]");
+            const excludeToggle = card.querySelector("[data-exclude-toggle]");
+            if (checkbox) {
+              checkbox.checked = false;
+            }
+            if (statusSelect) {
+              statusSelect.value = "{{ approved_status }}";
+              statusSelect.disabled = true;
+            }
+            if (excludeToggle) {
+              excludeToggle.checked = true;
+            }
+            card.dataset.itemStatus = "{{ excluded_status }}";
+            card.classList.add("is-excluded");
+            if (statusPill) {
+              statusPill.textContent = "Исключено";
+              statusPill.className = "status-pill status-{{ excluded_status }}";
+            }
+          });
+          if (selectVisibleToggle) {
+            selectVisibleToggle.checked = false;
+          }
+          applyFilter();
+          showToast(payload.message || "Выбранные задачи исключены.");
+        } catch (error) {
+          showToast(error.message, "error");
+        } finally {
+          updateSelectionState();
+        }
+      });
+
+      document.querySelector("[data-scroll-top]")?.addEventListener("click", () => {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      });
+
+      document.querySelector("[data-scroll-bottom]")?.addEventListener("click", () => {
+        window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
+      });
+
+      document.querySelectorAll("[data-split-item]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          button.disabled = true;
+          try {
+            const payload = await fetchJson(button.dataset.splitUrl, { method: "POST" });
+            showToast(payload.message || "Пункт разделен.");
+            window.location.reload();
+          } catch (error) {
+            showToast(error.message, "error");
+            button.disabled = false;
+          }
         });
       });
 

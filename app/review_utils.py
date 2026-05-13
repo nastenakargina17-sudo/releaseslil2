@@ -28,7 +28,7 @@ ITEM_TYPE_LABELS = {
     ItemType.CHANGE: "Изменение",
     ItemType.BUGFIX: "Багфикс",
     ItemType.TECHNICAL_IMPROVEMENT: "Техническая доработка",
-    ItemType.RELEASE_CANDIDATE: "Кандидат из \"Нет\"",
+    ItemType.RELEASE_CANDIDATE: "Задачи из \"Нет\"",
 }
 
 DESCRIPTIONLESS_ITEM_TYPES = {

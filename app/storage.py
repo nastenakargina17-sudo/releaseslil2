@@ -1,6 +1,7 @@
 import json
 import sqlite3
 import time
+from uuid import uuid4
 from typing import Iterable, List, Optional
 
 from app.config import DB_PATH, ensure_directories
@@ -75,6 +76,9 @@ def init_db() -> None:
         _ensure_column(conn, "digest_releases", "updated_at", "TEXT NOT NULL DEFAULT ''")
         _ensure_column(conn, "digest_items", "version", "INTEGER NOT NULL DEFAULT 1")
         _ensure_column(conn, "digest_items", "updated_at", "TEXT NOT NULL DEFAULT ''")
+        _ensure_column(conn, "digest_items", "source_item_titles", "TEXT NOT NULL DEFAULT '[]'")
+        _ensure_column(conn, "digest_items", "source_item_descriptions", "TEXT NOT NULL DEFAULT '[]'")
+        _ensure_column(conn, "digest_items", "source_item_modules", "TEXT NOT NULL DEFAULT '[]'")
 
 
 def _ensure_column(conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:
@@ -112,9 +116,9 @@ def replace_release_items(release_id: str, items: Iterable[DigestItem]) -> None:
             INSERT INTO digest_items (
                 id, release_id, source_item_ids, title, description, module, type,
                 category, status, is_paid_feature, image_paths, tracker_urls, grouping_mode,
-                updated_at
+                source_item_titles, source_item_descriptions, source_item_modules, updated_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [
                 (
@@ -131,6 +135,9 @@ def replace_release_items(release_id: str, items: Iterable[DigestItem]) -> None:
                     json.dumps(item.image_paths),
                     json.dumps(item.tracker_urls),
                     item.grouping_mode.value,
+                    json.dumps(item.source_item_titles),
+                    json.dumps(item.source_item_descriptions),
+                    json.dumps(item.source_item_modules),
                     _now_text(),
                 )
                 for item in items
@@ -166,6 +173,7 @@ def list_items(release_id: str) -> List[DigestItem]:
             """
             SELECT id, release_id, source_item_ids, title, description, module, type,
                    category, status, is_paid_feature, image_paths, tracker_urls, grouping_mode,
+                   source_item_titles, source_item_descriptions, source_item_modules,
                    version, updated_at
             FROM digest_items
             WHERE release_id = ?
@@ -182,6 +190,7 @@ def get_item(item_id: str) -> Optional[DigestItem]:
             """
             SELECT id, release_id, source_item_ids, title, description, module, type,
                    category, status, is_paid_feature, image_paths, tracker_urls, grouping_mode,
+                   source_item_titles, source_item_descriptions, source_item_modules,
                    version, updated_at
             FROM digest_items
             WHERE id = ?
@@ -220,6 +229,101 @@ def update_item(
         )
         if expected_version is not None and cursor.rowcount == 0:
             raise StaleObjectError("Digest item was updated by another reviewer")
+
+
+def bulk_exclude_items(release_id: str, item_ids: List[str]) -> int:
+    if not item_ids:
+        return 0
+    now = _now_text()
+    updated = 0
+    with connect() as conn:
+        for item_id in item_ids:
+            cursor = conn.execute(
+                """
+                UPDATE digest_items
+                SET status = ?, version = version + 1, updated_at = ?
+                WHERE release_id = ? AND id = ?
+                """,
+                (ItemStatus.EXCLUDED.value, now, release_id, item_id),
+            )
+            updated += cursor.rowcount
+    return updated
+
+
+def split_epic_item(item_id: str) -> List[DigestItem]:
+    item = get_item(item_id)
+    if item is None:
+        return []
+    if item.grouping_mode != GroupingMode.EPIC_GROUP:
+        return []
+    if not item.source_item_ids or not item.source_item_titles:
+        return []
+
+    split_items = []
+    for index, source_id in enumerate(item.source_item_ids):
+        title = item.source_item_titles[index] if index < len(item.source_item_titles) else source_id
+        module = item.source_item_modules[index] if index < len(item.source_item_modules) else item.module
+        tracker_url = item.tracker_urls[index] if index < len(item.tracker_urls) else ""
+        split_items.append(
+            DigestItem(
+                id=f"digest-{uuid4().hex[:10]}",
+                release_id=item.release_id,
+                source_item_ids=[source_id],
+                title=title,
+                description="",
+                module=module,
+                type=item.type,
+                category=item.category,
+                status=ItemStatus.DRAFT,
+                is_paid_feature=item.is_paid_feature,
+                tracker_urls=[tracker_url] if tracker_url else [],
+                grouping_mode=GroupingMode.SINGLE_TASK,
+                source_item_titles=[title],
+                source_item_descriptions=[
+                    item.source_item_descriptions[index]
+                    if index < len(item.source_item_descriptions)
+                    else ""
+                ],
+                source_item_modules=[module],
+            )
+        )
+
+    now = _now_text()
+    with connect() as conn:
+        conn.execute("DELETE FROM digest_items WHERE id = ?", (item_id,))
+        conn.executemany(
+            """
+            INSERT INTO digest_items (
+                id, release_id, source_item_ids, title, description, module, type,
+                category, status, is_paid_feature, image_paths, tracker_urls, grouping_mode,
+                source_item_titles, source_item_descriptions, source_item_modules, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            [
+                (
+                    split_item.id,
+                    split_item.release_id,
+                    json.dumps(split_item.source_item_ids),
+                    split_item.title,
+                    split_item.description,
+                    split_item.module,
+                    split_item.type.value,
+                    split_item.category.value if split_item.category else None,
+                    split_item.status.value,
+                    1 if split_item.is_paid_feature else 0,
+                    json.dumps(split_item.image_paths),
+                    json.dumps(split_item.tracker_urls),
+                    split_item.grouping_mode.value,
+                    json.dumps(split_item.source_item_titles),
+                    json.dumps(split_item.source_item_descriptions),
+                    json.dumps(split_item.source_item_modules),
+                    now,
+                )
+                for split_item in split_items
+            ],
+        )
+    return split_items
 
 
 def update_release_summary(
@@ -449,6 +553,9 @@ def _row_to_item(row: sqlite3.Row) -> DigestItem:
         image_paths=json.loads(row["image_paths"]),
         tracker_urls=json.loads(row["tracker_urls"]),
         grouping_mode=GroupingMode(row["grouping_mode"]),
+        source_item_titles=json.loads(row["source_item_titles"]),
+        source_item_descriptions=json.loads(row["source_item_descriptions"]),
+        source_item_modules=json.loads(row["source_item_modules"]),
         version=row["version"],
         updated_at=row["updated_at"],
     )

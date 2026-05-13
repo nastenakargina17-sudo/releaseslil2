@@ -55,6 +55,7 @@ from app.services.telegram_bot import TelegramBotService
 from app.session import clear_session, load_session, save_session
 from app.storage import (
     add_item_image,
+    bulk_exclude_items,
     claim_review_lock,
     get_release,
     init_db,
@@ -66,6 +67,7 @@ from app.storage import (
     replace_release_items,
     release_review_presence,
     release_review_lock,
+    split_epic_item,
     StaleObjectError,
     touch_review_presence,
     update_item,
@@ -306,6 +308,7 @@ def review_release(request: Request, release_id: str) -> HTMLResponse:
             "statuses": list(ItemStatus),
             "summary_statuses": list(SummaryStatus),
             "categories": list(ValueCategory),
+            "ItemType": ItemType,
             "status_labels": STATUS_LABELS,
             "category_labels": CATEGORY_LABELS,
             "item_type_labels": ITEM_TYPE_LABELS,
@@ -363,6 +366,7 @@ def update_review_item(
     is_paid_feature: Optional[str] = Form(None),
     exclude_from_release: Optional[str] = Form(None),
     release_candidate_action: Optional[str] = Form(None),
+    item_type: Optional[str] = Form(None),
     object_version: Optional[int] = Form(None),
 ) -> Response:
     item = get_item(item_id)
@@ -386,6 +390,9 @@ def update_review_item(
             effective_status = ItemStatus.APPROVED.value
             effective_category = None
             effective_description = ""
+    elif item.type in {ItemType.NEW_FEATURE, ItemType.CHANGE}:
+        if item_type in {ItemType.NEW_FEATURE.value, ItemType.CHANGE.value}:
+            effective_type = ItemType(item_type)
 
     try:
         update_item(
@@ -411,6 +418,52 @@ def update_review_item(
                 "item_type": effective_type.value,
                 "version": updated_item.version if updated_item else object_version,
                 "reload": moved_to_primary,
+            }
+        )
+    return RedirectResponse(url=f"/review/{release_id}", status_code=303)
+
+
+@app.post("/review/{release_id}/bulk-exclude")
+async def bulk_exclude_review_items(
+    request: Request,
+    release_id: str,
+) -> Response:
+    form = await request.form()
+    item_ids = [str(item_id) for item_id in form.getlist("item_ids") if str(item_id).strip()]
+    updated = bulk_exclude_items(release_id, item_ids)
+    if _wants_json(request):
+        return JSONResponse(
+            {
+                "ok": True,
+                "message": f"Исключено задач: {updated}.",
+                "item_ids": item_ids,
+                "status": ItemStatus.EXCLUDED.value,
+            }
+        )
+    return RedirectResponse(url=f"/review/{release_id}", status_code=303)
+
+
+@app.post("/review/{release_id}/items/{item_id}/split")
+def split_review_item(
+    request: Request,
+    release_id: str,
+    item_id: str,
+) -> Response:
+    item = get_item(item_id)
+    if item is None or item.release_id != release_id:
+        raise HTTPException(status_code=404, detail="Digest item not found")
+    split_items = split_epic_item(item_id)
+    if not split_items:
+        raise HTTPException(
+            status_code=400,
+            detail="Этот пункт нельзя разделить: нет сохраненных данных по исходным задачам.",
+        )
+    if _wants_json(request):
+        return JSONResponse(
+            {
+                "ok": True,
+                "message": f"Пункт разделен на задач: {len(split_items)}.",
+                "reload": True,
             }
         )
     return RedirectResponse(url=f"/review/{release_id}", status_code=303)
