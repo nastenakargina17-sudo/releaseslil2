@@ -54,7 +54,7 @@ from app.review_utils import (
 from app.services.ingest import build_release
 from app.services.importers import import_release_from_apis
 from app.services.mock_data import sample_source_items
-from app.services.publication import PublicationError, build_published_digest_snapshot
+from app.services.publication import PublicationError, build_live_digest_content, build_published_digest_snapshot
 from app.services.telegram_bot import TelegramBotService
 from app.session import clear_session, load_session, save_session
 from app.storage import (
@@ -64,6 +64,7 @@ from app.storage import (
     init_db,
     get_item,
     get_published_digest,
+    list_published_digests,
     list_items,
     list_review_presence,
     list_review_locks,
@@ -661,49 +662,81 @@ def publish_digest(request: Request, release_id: str) -> RedirectResponse:
     return RedirectResponse(url=f"/digest/{release_id}", status_code=303)
 
 
+@app.get("/review/{release_id}/digest-preview", response_class=HTMLResponse)
+def digest_preview(request: Request, release_id: str) -> HTMLResponse:
+    release = get_release(release_id)
+    if release is None:
+        raise HTTPException(status_code=404, detail="Release not found")
+    items = list_items(release_id)
+    blockers = digest_blockers(release, items)
+    if release.publication_status != PublicationStatus.PREVIEW or blockers:
+        return templates.TemplateResponse(
+            request,
+            "digest.html",
+            {
+                "release": release,
+                "page_mode": "preview_unavailable",
+                "preparation_message": "Preview еще не сформирован",
+                "sections": [],
+                "metrics": {},
+                "review_user": getattr(request.state, "review_session", {}).get("user"),
+            },
+        )
+    content = build_live_digest_content(items)
+    return templates.TemplateResponse(
+        request,
+        "digest.html",
+        {
+            "release": release,
+            "page_mode": "preview",
+            "sections": content["sections"],
+            "metrics": content["metrics"],
+            "review_user": getattr(request.state, "review_session", {}).get("user"),
+        },
+    )
+
+
+@app.get("/digests", response_class=HTMLResponse)
+def digest_archive(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse(
+        request,
+        "digests.html",
+        {"digests": list_published_digests()},
+    )
+
+
 @app.get("/digest/{release_id}", response_class=HTMLResponse)
 def final_digest(request: Request, release_id: str) -> HTMLResponse:
     release = get_release(release_id)
     if release is None:
         raise HTTPException(status_code=404, detail="Release not found")
 
-    all_items = list_items(release_id)
-    blockers = digest_blockers(release, all_items)
-    item_blockers = [blocker for blocker in blockers if blocker != "Summary не подтвержден"]
-    if item_blockers:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                "Не все задачи находятся в статусе подтверждения. "
-                "Для генерации дайджеста все задачи должны быть подтверждены."
-            ),
+    snapshot = get_published_digest(release_id)
+    review_user = load_session(request, auth_settings).get("user")
+    if snapshot is None:
+        return templates.TemplateResponse(
+            request,
+            "digest.html",
+            {
+                "release": release,
+                "page_mode": "preparation",
+                "preparation_message": "Дайджест в подготовке",
+                "sections": [],
+                "metrics": {},
+                "review_user": review_user,
+            },
         )
-    if blockers:
-        raise HTTPException(status_code=400, detail="Сначала подтвердите summary релиза.")
-
-    approved_items = [
-        item for item in all_items
-        if item.status == ItemStatus.APPROVED and item.type != ItemType.RELEASE_CANDIDATE
-    ]
-
-    new_features = [item for item in approved_items if item.type == ItemType.NEW_FEATURE]
-    changes = [item for item in approved_items if item.type == ItemType.CHANGE]
-    support_items = [
-        item for item in approved_items
-        if item.type in {ItemType.BUGFIX, ItemType.TECHNICAL_IMPROVEMENT}
-    ]
 
     return templates.TemplateResponse(
         request,
         "digest.html",
         {
             "release": release,
-            "new_features": new_features,
-            "changes": changes,
-            "support_items": support_items,
-            "category_labels": CLIENT_CATEGORY_LABELS,
-            "item_type_labels": ITEM_TYPE_LABELS,
-            "is_video_media_path": is_video_media_path,
+            "snapshot": snapshot,
+            "page_mode": "public",
+            "sections": snapshot.content.get("sections", []),
+            "metrics": snapshot.content.get("metrics", {}),
+            "review_user": review_user,
         },
     )
 

@@ -5,283 +5,80 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Дайджест релиза {{ release.id }}</title>
   <style>
-    :root {
-      color-scheme: light;
-      --ink: #18212f;
-      --muted: #667085;
-      --line: #d9e2ec;
-      --panel: #ffffff;
-      --soft: #f5f7fb;
-      --accent: #0f766e;
-      --accent-soft: #dff7f3;
-      --paid: #7c3aed;
-      --paid-soft: #eee7ff;
-    }
-
-    * { box-sizing: border-box; }
-
-    body {
-      margin: 0;
-      font-family: Arial, sans-serif;
-      color: var(--ink);
-      background: #f3f6fa;
-      line-height: 1.55;
-    }
-
-    .page {
-      max-width: 1080px;
-      margin: 0 auto;
-      padding: 40px 20px 56px;
-    }
-
-    .hero {
-      padding: 36px 0 28px;
-      border-bottom: 1px solid var(--line);
-    }
-
-    .eyebrow {
-      margin: 0 0 10px;
-      color: var(--muted);
-      font-size: 14px;
-    }
-
-    h1 {
-      margin: 0;
-      font-size: 40px;
-      line-height: 1.15;
-      letter-spacing: 0;
-    }
-
-    .summary {
-      max-width: 820px;
-      margin: 20px 0 0;
-      font-size: 18px;
-      color: #344054;
-    }
-
-    .section {
-      margin-top: 38px;
-    }
-
-    .section h2 {
-      margin: 0 0 18px;
-      font-size: 26px;
-      letter-spacing: 0;
-    }
-
-    .item-grid {
-      display: grid;
-      gap: 18px;
-    }
-
-    .digest-card {
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 22px;
-    }
-
-    .card-topline {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      align-items: center;
-      margin-bottom: 12px;
-    }
-
-    .module {
-      color: var(--muted);
-      font-size: 14px;
-    }
-
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      min-height: 26px;
-      padding: 4px 10px;
-      border-radius: 999px;
-      font-size: 13px;
-      font-weight: 700;
-      background: var(--accent-soft);
-      color: #0b5f59;
-    }
-
-    .badge-paid {
-      background: var(--paid-soft);
-      color: var(--paid);
-    }
-
-    .digest-card h3 {
-      margin: 0 0 10px;
-      font-size: 22px;
-      line-height: 1.25;
-      letter-spacing: 0;
-    }
-
-    .digest-card p {
-      margin: 0;
-      color: #344054;
-    }
-
-    .media-gallery {
-      display: grid;
-      gap: 12px;
-      margin-top: 18px;
-    }
-
-    .media-primary img,
-    .media-primary video,
-    .media-secondary img,
-    .media-secondary video {
-      display: block;
-      width: 100%;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: var(--soft);
-    }
-
-    .media-primary img,
-    .media-primary video {
-      max-height: 560px;
-      object-fit: contain;
-    }
-
-    .media-secondary {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      gap: 12px;
-    }
-
-    .media-secondary img,
-    .media-secondary video {
-      aspect-ratio: 16 / 9;
-      object-fit: cover;
-    }
-
-    details.support {
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 0;
-    }
-
-    details.support summary {
-      cursor: pointer;
-      padding: 18px 22px;
-      font-size: 20px;
-      font-weight: 700;
-      list-style-position: inside;
-    }
-
-    .support-list {
-      display: grid;
-      gap: 0;
-      border-top: 1px solid var(--line);
-    }
-
-    .support-item {
-      display: grid;
-      grid-template-columns: minmax(120px, 180px) 1fr auto;
-      gap: 14px;
-      align-items: center;
-      padding: 14px 22px;
-      border-top: 1px solid #edf1f5;
-    }
-
-    .support-item:first-child {
-      border-top: 0;
-    }
-
-    .support-title {
-      font-weight: 700;
-    }
-
-    a {
-      color: #0f5f89;
-      text-decoration: none;
-      font-weight: 700;
-    }
-
-    a:hover {
-      text-decoration: underline;
-    }
-
-    @media (max-width: 700px) {
-      .page {
-        padding: 28px 14px 42px;
-      }
-
-      h1 {
-        font-size: 32px;
-      }
-
-      .summary {
-        font-size: 16px;
-      }
-
-      .digest-card {
-        padding: 18px;
-      }
-
-      .support-item {
-        grid-template-columns: 1fr;
-        gap: 6px;
-      }
-    }
+    body { font-family: Arial, sans-serif; margin: 0; background: #f5f7fb; color: #09081e; }
+    .page { max-width: 1080px; margin: 0 auto; padding: 40px 20px 64px; }
+    .hero, .card, details { background: #fff; border: 1px solid #e6eaf8; border-radius: 8px; padding: 24px; }
+    .hero { margin-bottom: 24px; }
+    .banner { padding: 12px 16px; border-radius: 8px; background: #d9ffdb; font-weight: 700; margin-bottom: 16px; }
+    .toc { display: flex; gap: 10px; flex-wrap: wrap; margin: 20px 0; }
+    .toc a { color: #09081e; background: #d9ffdb; border-radius: 999px; padding: 8px 12px; text-decoration: none; font-weight: 700; }
+    .section { margin-top: 28px; }
+    .grid { display: grid; gap: 16px; }
+    .badge { display: inline-block; background: #d9ffdb; border-radius: 999px; padding: 4px 10px; font-weight: 700; font-size: 13px; }
+    .actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 18px; }
+    .button { border: 0; background: #49de4e; color: #09081e; border-radius: 8px; padding: 10px 14px; font-weight: 700; text-decoration: none; cursor: pointer; }
   </style>
 </head>
 <body>
   <main class="page">
-    <header class="hero">
-      <p class="eyebrow">Дата релиза: <strong>{{ release.release_date }}</strong></p>
-      <h1>Дайджест релиза</h1>
-      <p class="summary">{{ release.summary }}</p>
-    </header>
-
-    {% if new_features %}
-      <section class="section" aria-labelledby="new-features-heading">
-        <h2 id="new-features-heading">Что нового</h2>
-        <div class="item-grid">
-          {% for item in new_features %}
-            {% include "digest_item_card.html" %}
-          {% endfor %}
-        </div>
-      </section>
+    {% if page_mode == "preview" %}
+      <div class="banner">Предпросмотр</div>
     {% endif %}
 
-    {% if changes %}
-      <section class="section" aria-labelledby="changes-heading">
-        <h2 id="changes-heading">Что стало удобнее</h2>
-        <div class="item-grid">
-          {% for item in changes %}
-            {% include "digest_item_card.html" %}
-          {% endfor %}
-        </div>
+    {% if page_mode in ["preparation", "preview_unavailable"] %}
+      <section class="hero">
+        <h1>{{ preparation_message }}</h1>
+        <p>Дайджест появится здесь после публикации.</p>
+        {% if review_user %}
+          <p><a href="/review/{{ release.id }}">Вернуться в ревью</a></p>
+        {% endif %}
       </section>
-    {% endif %}
-
-    {% if support_items %}
-      <section class="section" aria-labelledby="support-heading">
-        <details class="support">
-          <summary id="support-heading">Исправления и технические улучшения</summary>
-          <div class="support-list">
-            {% for item in support_items %}
-              <div class="support-item">
-                <div class="module">{{ item.module }}</div>
-                <div>
-                  <div class="support-title">{{ item.title }}</div>
-                  {% if item.category %}
-                    <span class="badge">{{ category_labels[item.category] }}</span>
-                  {% endif %}
-                </div>
-                {% if item.tracker_urls %}
-                  <a href="{{ item.tracker_urls[0] }}">Задача в трекере</a>
-                {% endif %}
-              </div>
-            {% endfor %}
+    {% else %}
+      <section class="hero">
+        <p>Дата релиза: <strong>{{ release.release_date }}</strong></p>
+        <h1>Дайджест релиза</h1>
+        <p>{{ release.summary if page_mode == "preview" else snapshot.summary }}</p>
+        {% if page_mode == "preview" %}
+          <div class="actions">
+            <form method="post" action="/review/{{ release.id }}/publish-digest">
+              <button type="submit" class="button">Опубликовать дайджест</button>
+            </form>
+            <form method="post" action="/review/{{ release.id }}/return-digest-to-review">
+              <button type="submit" class="button">Вернуться к ревью</button>
+            </form>
           </div>
-        </details>
+        {% endif %}
       </section>
+
+      {% if sections %}
+        <nav class="toc" aria-label="Оглавление">
+          {% for section in sections %}
+            <a href="#{{ section.id }}">{{ section.title }}</a>
+          {% endfor %}
+        </nav>
+      {% endif %}
+
+      {% for section in sections %}
+        <section class="section" id="{{ section.id }}">
+          {% if section.collapsed %}
+            <details>
+              <summary>{{ section.title }}</summary>
+              <div class="grid">
+                {% for item in section["items"] %}
+                  {% include "digest_item_card.html" %}
+                {% endfor %}
+              </div>
+            </details>
+          {% else %}
+            <h2>{{ section.title }}</h2>
+            <div class="grid">
+              {% for item in section["items"] %}
+                {% include "digest_item_card.html" %}
+              {% endfor %}
+            </div>
+          {% endif %}
+        </section>
+      {% endfor %}
     {% endif %}
   </main>
 </body>

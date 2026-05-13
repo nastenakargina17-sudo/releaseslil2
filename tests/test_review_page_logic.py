@@ -393,6 +393,113 @@ class DigestGuardTests(unittest.TestCase):
         self.assertIn("уже опубликован", response.json()["message"])
         self.assertNotEqual(self.storage.get_item("item-1").title, "Should not save")
 
+    def test_digest_public_page_shows_preparation_until_published(self) -> None:
+        response = self.client.get("/digest/2026-04")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Дайджест в подготовке", response.text)
+        self.assertNotIn("Feature title", response.text)
+
+    def test_preview_route_requires_preview_status(self) -> None:
+        response = self.client.get("/review/2026-04/digest-preview")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Preview еще не сформирован", response.text)
+
+    def test_preview_route_renders_live_approved_data(self) -> None:
+        self.storage.update_item(
+            item_id="item-1",
+            title="Preview feature",
+            description="Preview description",
+            category=ValueCategory.TIME_SAVING.value,
+            status=ItemStatus.APPROVED.value,
+            is_paid_feature=False,
+        )
+        self.storage.update_release_publication_status(
+            "2026-04",
+            PublicationStatus.PREVIEW,
+            note="Preview сформирован.",
+            preview_prepared_by="Employee",
+        )
+
+        response = self.client.get("/review/2026-04/digest-preview")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Предпросмотр", response.text)
+        self.assertIn("Preview feature", response.text)
+        self.assertIn("Опубликовать дайджест", response.text)
+
+    def test_public_digest_reads_published_snapshot_not_live_review(self) -> None:
+        from app.models import PublishedDigest
+
+        self.storage.save_published_digest(
+            PublishedDigest(
+                release_id="2026-04",
+                release_date="2026-04-30",
+                summary="Published summary",
+                content={
+                    "sections": [
+                        {
+                            "id": "new_features",
+                            "title": "Что нового",
+                            "collapsed": False,
+                            "items": [{"title": "Snapshot feature", "description": "Snapshot text", "module": "Core", "value_category_label": "", "is_paid_feature": False, "media": []}],
+                        }
+                    ],
+                    "metrics": {"items_count": 1, "product_items_count": 1},
+                },
+                published_by="Employee",
+                published_at="1710000000",
+            )
+        )
+        self.storage.update_release_publication_status(
+            "2026-04",
+            PublicationStatus.PUBLISHED,
+            note="Дайджест опубликован.",
+            published_by="Employee",
+        )
+        self.storage.update_release_publication_status(
+            "2026-04",
+            PublicationStatus.DRAFT,
+            note="",
+        )
+        self.storage.update_item(
+            item_id="item-1",
+            title="Live changed feature",
+            description="Live text",
+            category="",
+            status=ItemStatus.APPROVED.value,
+            is_paid_feature=False,
+        )
+
+        response = self.client.get("/digest/2026-04")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Snapshot feature", response.text)
+        self.assertNotIn("Live changed feature", response.text)
+        self.assertNotIn("Employee", response.text)
+
+    def test_archive_lists_only_published_snapshots(self) -> None:
+        from app.models import PublishedDigest
+
+        self.storage.save_published_digest(
+            PublishedDigest(
+                release_id="2026-04",
+                release_date="2026-04-30",
+                summary="Published summary",
+                content={"sections": [], "metrics": {"items_count": 0, "product_items_count": 0}},
+                published_by="Employee",
+                published_at="1710000000",
+            )
+        )
+
+        response = self.client.get("/digests")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Архив дайджестов", response.text)
+        self.assertIn("2026-04", response.text)
+        self.assertIn("Published summary", response.text)
+
     def test_digest_route_rejects_non_final_items(self) -> None:
         response = self.client.get("/digest/2026-04")
 

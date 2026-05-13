@@ -1,39 +1,27 @@
-<article class="digest-card">
-  <div class="card-topline">
-    <span class="module">{{ item.module }}</span>
-    {% if item.category %}
-      <span class="badge">{{ category_labels[item.category] }}</span>
-    {% endif %}
-    {% if item.is_paid_feature %}
-      <span class="badge badge-paid">Платная функция</span>
-    {% endif %}
-  </div>
+<article class="card">
+  <p>{{ item.module }}</p>
+  {% if item.value_category_label %}
+    <span class="badge">{{ item.value_category_label }}</span>
+  {% endif %}
+  {% if item.is_paid_feature %}
+    <span class="badge">Платная функция</span>
+  {% endif %}
   <h3>{{ item.title }}</h3>
   {% if item.description %}
     <p>{{ item.description }}</p>
   {% endif %}
-
-  {% if item.image_paths %}
-    <div class="media-gallery">
-      <div class="media-primary">
-        {% set primary_media = item.image_paths[0] %}
-        {% if is_video_media_path(primary_media) %}
-          <video src="{{ primary_media }}" controls preload="metadata"></video>
+  {% if item.tracker_urls %}
+    <p><a href="{{ item.tracker_urls[0] }}">Задача в трекере</a></p>
+  {% endif %}
+  {% if item.media %}
+    <div class="media-strip">
+      {% for media in item.media %}
+        {% if media.kind == "video" %}
+          <video src="{{ media.path }}" controls preload="metadata" style="max-width: 100%;"></video>
         {% else %}
-          <img src="{{ primary_media }}" alt="Иллюстрация к пункту {{ item.title }}">
+          <img src="{{ media.path }}" alt="Иллюстрация к пункту {{ item.title }}" style="max-width: 100%;">
         {% endif %}
-      </div>
-      {% if item.image_paths|length > 1 %}
-        <div class="media-secondary">
-          {% for media_path in item.image_paths[1:] %}
-            {% if is_video_media_path(media_path) %}
-              <video src="{{ media_path }}" controls preload="metadata"></video>
-            {% else %}
-              <img src="{{ media_path }}" alt="Дополнительная иллюстрация к пункту {{ item.title }}">
-            {% endif %}
-          {% endfor %}
-        </div>
-      {% endif %}
+      {% endfor %}
     </div>
   {% endif %}
 </article>
