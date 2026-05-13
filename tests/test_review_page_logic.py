@@ -1,5 +1,6 @@
 import importlib
 import io
+import json
 import os
 import tempfile
 import unittest
@@ -8,7 +9,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 from fastapi.responses import Response
 
-from app.models import DigestItem, DigestRelease, GroupingMode, ItemStatus, ItemType, SourceItem, SummaryStatus, ValueCategory
+from app.models import DigestItem, DigestRelease, GroupingMode, ItemStatus, ItemType, PublicationStatus, SourceItem, SummaryStatus, ValueCategory
 from app.session import SESSION_COOKIE_NAME, save_session
 
 
@@ -204,6 +205,60 @@ class DigestGuardTests(unittest.TestCase):
         self.assertIn('Задачи из "Нет"', response.text)
         self.assertIn("На странице сейчас", response.text)
         self.assertNotIn("Выйти из ревью", response.text)
+
+    def test_release_defaults_to_draft_publication_status(self) -> None:
+        release = self.storage.get_release("2026-04")
+
+        self.assertEqual(release.publication_status, PublicationStatus.DRAFT)
+        self.assertEqual(release.publication_status_note, "")
+        self.assertEqual(release.preview_prepared_by, "")
+        self.assertEqual(release.preview_prepared_at, "")
+
+    def test_publication_status_can_be_updated_with_a_note(self) -> None:
+        self.storage.update_release_publication_status(
+            release_id="2026-04",
+            status=PublicationStatus.PREVIEW,
+            note="Preview сформирован.",
+            preview_prepared_by="Employee",
+        )
+
+        release = self.storage.get_release("2026-04")
+
+        self.assertEqual(release.publication_status, PublicationStatus.PREVIEW)
+        self.assertEqual(release.publication_status_note, "Preview сформирован.")
+        self.assertEqual(release.preview_prepared_by, "Employee")
+        self.assertNotEqual(release.preview_prepared_at, "")
+
+    def test_published_digest_snapshot_round_trips(self) -> None:
+        from app.models import PublishedDigest
+
+        snapshot = PublishedDigest(
+            release_id="2026-04",
+            release_date="2026-04-30",
+            summary="Published summary",
+            content={
+                "sections": [
+                    {
+                        "id": "new_features",
+                        "title": "Что нового",
+                        "items": [{"title": "Published feature", "media": []}],
+                    }
+                ],
+                "metrics": {"items_count": 1},
+            },
+            published_by="Employee",
+            published_at="1710000000",
+        )
+
+        self.storage.save_published_digest(snapshot)
+        loaded = self.storage.get_published_digest("2026-04")
+        archive = self.storage.list_published_digests()
+
+        self.assertEqual(loaded.release_id, "2026-04")
+        self.assertEqual(loaded.summary, "Published summary")
+        self.assertEqual(loaded.content["sections"][0]["items"][0]["title"], "Published feature")
+        self.assertEqual(loaded.published_by, "Employee")
+        self.assertEqual(archive[0].release_id, "2026-04")
 
     def test_digest_route_rejects_non_final_items(self) -> None:
         response = self.client.get("/digest/2026-04")

@@ -10,6 +10,8 @@ from app.models import (
     GroupingMode,
     ItemStatus,
     ItemType,
+    PublishedDigest,
+    PublicationStatus,
     SummaryStatus,
     ValueCategory,
 )
@@ -69,10 +71,26 @@ def init_db() -> None:
                 updated_at REAL NOT NULL,
                 PRIMARY KEY (release_id, owner_key)
             );
+
+            CREATE TABLE IF NOT EXISTS published_digests (
+                release_id TEXT PRIMARY KEY,
+                release_date TEXT NOT NULL,
+                summary TEXT NOT NULL,
+                content TEXT NOT NULL,
+                published_by TEXT NOT NULL,
+                published_at TEXT NOT NULL,
+                FOREIGN KEY (release_id) REFERENCES digest_releases(id)
+            );
             """
         )
         _ensure_column(conn, "digest_releases", "version", "INTEGER NOT NULL DEFAULT 1")
         _ensure_column(conn, "digest_releases", "updated_at", "TEXT NOT NULL DEFAULT ''")
+        _ensure_column(conn, "digest_releases", "publication_status", "TEXT NOT NULL DEFAULT 'draft'")
+        _ensure_column(conn, "digest_releases", "publication_status_note", "TEXT NOT NULL DEFAULT ''")
+        _ensure_column(conn, "digest_releases", "preview_prepared_by", "TEXT NOT NULL DEFAULT ''")
+        _ensure_column(conn, "digest_releases", "preview_prepared_at", "TEXT NOT NULL DEFAULT ''")
+        _ensure_column(conn, "digest_releases", "published_by", "TEXT NOT NULL DEFAULT ''")
+        _ensure_column(conn, "digest_releases", "published_at", "TEXT NOT NULL DEFAULT ''")
         _ensure_column(conn, "digest_items", "version", "INTEGER NOT NULL DEFAULT 1")
         _ensure_column(conn, "digest_items", "updated_at", "TEXT NOT NULL DEFAULT ''")
 
@@ -91,8 +109,12 @@ def upsert_release(release: DigestRelease) -> None:
     with connect() as conn:
         conn.execute(
             """
-            INSERT INTO digest_releases (id, release_date, summary, summary_status, updated_at)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO digest_releases (
+                id, release_date, summary, summary_status, publication_status,
+                publication_status_note, preview_prepared_by, preview_prepared_at,
+                published_by, published_at, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 release_date = excluded.release_date,
                 summary = excluded.summary,
@@ -100,7 +122,19 @@ def upsert_release(release: DigestRelease) -> None:
                 version = digest_releases.version + 1,
                 updated_at = excluded.updated_at
             """,
-            (release.id, release.release_date, release.summary, release.summary_status.value, _now_text()),
+            (
+                release.id,
+                release.release_date,
+                release.summary,
+                release.summary_status.value,
+                release.publication_status.value,
+                release.publication_status_note,
+                release.preview_prepared_by,
+                release.preview_prepared_at,
+                release.published_by,
+                release.published_at,
+                _now_text(),
+            ),
         )
 
 
@@ -142,7 +176,9 @@ def get_release(release_id: str) -> Optional[DigestRelease]:
     with connect() as conn:
         row = conn.execute(
             """
-            SELECT id, release_date, summary, summary_status, version, updated_at
+            SELECT id, release_date, summary, summary_status, publication_status,
+                   publication_status_note, preview_prepared_by, preview_prepared_at,
+                   published_by, published_at, version, updated_at
             FROM digest_releases
             WHERE id = ?
             """,
@@ -155,6 +191,12 @@ def get_release(release_id: str) -> Optional[DigestRelease]:
         release_date=row["release_date"],
         summary=row["summary"],
         summary_status=SummaryStatus(row["summary_status"]),
+        publication_status=PublicationStatus(row["publication_status"]),
+        publication_status_note=row["publication_status_note"],
+        preview_prepared_by=row["preview_prepared_by"],
+        preview_prepared_at=row["preview_prepared_at"],
+        published_by=row["published_by"],
+        published_at=row["published_at"],
         version=row["version"],
         updated_at=row["updated_at"],
     )
@@ -241,6 +283,107 @@ def update_release_summary(
         cursor = conn.execute(sql, params)
         if expected_version is not None and cursor.rowcount == 0:
             raise StaleObjectError("Release summary was updated by another reviewer")
+
+
+def update_release_publication_status(
+    release_id: str,
+    status: PublicationStatus,
+    note: str = "",
+    preview_prepared_by: str = "",
+    published_by: str = "",
+) -> None:
+    now = _now_text()
+    preview_at = now if status == PublicationStatus.PREVIEW else ""
+    published_at = now if status == PublicationStatus.PUBLISHED else ""
+    with connect() as conn:
+        conn.execute(
+            """
+            UPDATE digest_releases
+            SET publication_status = ?,
+                publication_status_note = ?,
+                preview_prepared_by = ?,
+                preview_prepared_at = ?,
+                published_by = ?,
+                published_at = ?,
+                version = version + 1,
+                updated_at = ?
+            WHERE id = ?
+            """,
+            (
+                status.value,
+                note,
+                preview_prepared_by if status == PublicationStatus.PREVIEW else "",
+                preview_at,
+                published_by if status == PublicationStatus.PUBLISHED else "",
+                published_at,
+                now,
+                release_id,
+            ),
+        )
+
+
+def reset_preview_after_review_change(release_id: str) -> None:
+    release = get_release(release_id)
+    if release is None or release.publication_status != PublicationStatus.PREVIEW:
+        return
+    update_release_publication_status(
+        release_id,
+        PublicationStatus.DRAFT,
+        note="Preview сброшен, потому что данные ревью изменились. Сформируйте preview заново перед публикацией.",
+    )
+
+
+def save_published_digest(snapshot: PublishedDigest) -> None:
+    with connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO published_digests (
+                release_id, release_date, summary, content, published_by, published_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(release_id) DO UPDATE SET
+                release_date = excluded.release_date,
+                summary = excluded.summary,
+                content = excluded.content,
+                published_by = excluded.published_by,
+                published_at = excluded.published_at
+            """,
+            (
+                snapshot.release_id,
+                snapshot.release_date,
+                snapshot.summary,
+                json.dumps(snapshot.content, ensure_ascii=False),
+                snapshot.published_by,
+                snapshot.published_at,
+            ),
+        )
+
+
+def get_published_digest(release_id: str) -> Optional[PublishedDigest]:
+    with connect() as conn:
+        row = conn.execute(
+            """
+            SELECT release_id, release_date, summary, content, published_by, published_at
+            FROM published_digests
+            WHERE release_id = ?
+            """,
+            (release_id,),
+        ).fetchone()
+    if row is None:
+        return None
+    return _row_to_published_digest(row)
+
+
+def list_published_digests() -> List[PublishedDigest]:
+    with connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT release_id, release_date, summary, content, published_by, published_at
+            FROM published_digests
+            ORDER BY release_date DESC, release_id DESC
+            """
+        ).fetchall()
+    return [_row_to_published_digest(row) for row in rows]
 
 
 class StaleObjectError(Exception):
@@ -451,4 +594,15 @@ def _row_to_item(row: sqlite3.Row) -> DigestItem:
         grouping_mode=GroupingMode(row["grouping_mode"]),
         version=row["version"],
         updated_at=row["updated_at"],
+    )
+
+
+def _row_to_published_digest(row: sqlite3.Row) -> PublishedDigest:
+    return PublishedDigest(
+        release_id=row["release_id"],
+        release_date=row["release_date"],
+        summary=row["summary"],
+        content=json.loads(row["content"]),
+        published_by=row["published_by"],
+        published_at=row["published_at"],
     )

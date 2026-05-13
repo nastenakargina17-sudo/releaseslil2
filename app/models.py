@@ -24,6 +24,12 @@ class SummaryStatus(str, Enum):
     APPROVED = "approved"
 
 
+class PublicationStatus(str, Enum):
+    DRAFT = "draft"
+    PREVIEW = "preview"
+    PUBLISHED = "published"
+
+
 class ValueCategory(str, Enum):
     TIME_SAVING = "time_saving"
     ERROR_REDUCTION = "error_reduction"
@@ -75,5 +81,21 @@ class DigestRelease:
     release_date: str
     summary: str
     summary_status: SummaryStatus = SummaryStatus.DRAFT
+    publication_status: PublicationStatus = PublicationStatus.DRAFT
+    publication_status_note: str = ""
+    preview_prepared_by: str = ""
+    preview_prepared_at: str = ""
+    published_by: str = ""
+    published_at: str = ""
     version: int = 1
     updated_at: str = ""
+
+
+@dataclass
+class PublishedDigest:
+    release_id: str
+    release_date: str
+    summary: str
+    content: dict
+    published_by: str
+    published_at: str
