@@ -646,10 +646,38 @@ class DigestGuardTests(unittest.TestCase):
         response = self.client.get("/digest/2026-04")
 
         self.assertEqual(response.status_code, 200)
-        self.assertIn("/static/brand/Logo_Skillaz_RGB.svg", response.text)
+        self.assertIn("/static/brand/Logo_Skillaz_Black.png", response.text)
         self.assertIn("Подбор", response.text)
         self.assertIn("Оглавление", response.text)
         self.assertIn("#49DE4E", response.text)
+
+    def test_digest_uses_deep_brand_report_markup(self) -> None:
+        self.storage.update_release_publication_status("2026-04", PublicationStatus.PREVIEW)
+        item = DigestItem(
+            id="feature-paid",
+            release_id="2026-04",
+            source_item_ids=[],
+            title="Paid feature",
+            description="Paid feature text",
+            module="Интеграции",
+            type=ItemType.NEW_FEATURE,
+            category=ValueCategory.TIME_SAVING,
+            status=ItemStatus.APPROVED,
+            is_paid_feature=True,
+        )
+        self.storage.replace_release_items("2026-04", [item])
+
+        response = self.client.get("/review/2026-04/digest-preview")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Logo_Skillaz_Black.png", response.text)
+        self.assertIn("Итоги релиза", response.text)
+        self.assertIn("Всего изменений", response.text)
+        self.assertIn("Новые функции", response.text)
+        self.assertIn("Улучшения", response.text)
+        self.assertIn("Техническая база", response.text)
+        self.assertIn('class="module-icon module-icon-integrations"', response.text)
+        self.assertIn('class="premium-badge"', response.text)
 
     def test_multiple_media_render_as_carousel(self) -> None:
         from app.models import PublishedDigest

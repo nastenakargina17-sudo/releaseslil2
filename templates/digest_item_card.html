@@ -1,17 +1,22 @@
-<article class="card">
-  <p>{{ item.module }}</p>
-  {% if item.value_category_label %}
-    <span class="badge">{{ item.value_category_label }}</span>
-  {% endif %}
-  {% if item.is_paid_feature %}
-    <span class="badge">Платная функция</span>
-  {% endif %}
+<article class="card card-{{ section.id if section else 'default' }}">
+  <div class="card-meta">
+    <span class="module-chip">
+      <span class="module-icon module-icon-{{ item.module_icon or 'module' }}" aria-hidden="true"></span>
+      {{ item.module }}
+    </span>
+    {% if item.value_category_label %}
+      <span class="value-badge">{{ item.value_category_label }}</span>
+    {% endif %}
+    {% if item.is_paid_feature %}
+      <span class="premium-badge">Платная функция</span>
+    {% endif %}
+  </div>
   <h3>{{ item.title }}</h3>
   {% if item.description %}
-    <p>{{ item.description }}</p>
+    <p class="card-description">{{ item.description }}</p>
   {% endif %}
   {% if item.tracker_urls %}
-    <p><a href="{{ item.tracker_urls[0] }}">Задача в трекере</a></p>
+    <p class="tracker-link"><a href="{{ item.tracker_urls[0] }}">Задача в трекере</a></p>
   {% endif %}
   {% if item.media %}
     {% if item.media|length > 1 %}
