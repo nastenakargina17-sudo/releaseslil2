@@ -1219,6 +1219,15 @@ class DigestGuardTests(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn("Поддерживаются JPG, PNG, WEBP, GIF, MP4 и WEBM.", response.text)
 
+    def test_review_upload_javascript_preserves_original_images(self) -> None:
+        response = self.client.get("/review/2026-04")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("canvas.toBlob", response.text)
+        self.assertNotIn("image/webp\", 0.82", response.text)
+        self.assertNotIn("convertImageToWebp", response.text)
+        self.assertIn("return file;", response.text)
+
     def test_uploaded_media_can_be_deleted(self) -> None:
         initial_version = self.storage.get_item("item-1").version
         upload_response = self.client.post(
