@@ -500,6 +500,53 @@ class DigestGuardTests(unittest.TestCase):
         self.assertIn("2026-04", response.text)
         self.assertIn("Published summary", response.text)
 
+    def test_review_page_shows_prepare_preview_action_when_ready(self) -> None:
+        self.storage.update_item(
+            item_id="item-1",
+            title="Feature title",
+            description="Feature description",
+            category=ValueCategory.TIME_SAVING.value,
+            status=ItemStatus.APPROVED.value,
+            is_paid_feature=False,
+        )
+
+        response = self.client.get("/review/2026-04")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Сформировать preview", response.text)
+        self.assertNotIn("Отправить готовый дайджест в Telegram", response.text)
+
+    def test_review_page_shows_publish_action_in_preview_state(self) -> None:
+        self.storage.update_release_publication_status(
+            "2026-04",
+            PublicationStatus.PREVIEW,
+            note="Preview сформирован.",
+            preview_prepared_by="Employee",
+        )
+
+        response = self.client.get("/review/2026-04")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Открыть preview", response.text)
+        self.assertIn("Опубликовать дайджест", response.text)
+        self.assertIn("зафиксирует версию и закроет релиз", response.text)
+
+    def test_review_page_shows_published_audit_and_open_digest_action(self) -> None:
+        self.storage.update_release_publication_status(
+            "2026-04",
+            PublicationStatus.PUBLISHED,
+            note="Дайджест опубликован.",
+            published_by="Employee",
+        )
+
+        response = self.client.get("/review/2026-04")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Дайджест опубликован", response.text)
+        self.assertIn("Employee", response.text)
+        self.assertIn("Открыть опубликованный дайджест", response.text)
+        self.assertNotIn("Сформировать preview", response.text)
+
     def test_digest_route_rejects_non_final_items(self) -> None:
         response = self.client.get("/digest/2026-04")
 

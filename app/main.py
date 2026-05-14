@@ -314,6 +314,8 @@ def review_release(request: Request, release_id: str) -> HTMLResponse:
             "candidate_items": candidate_items,
             "statuses": list(ItemStatus),
             "summary_statuses": list(SummaryStatus),
+            "publication_status": release.publication_status,
+            "publication_statuses": PublicationStatus,
             "categories": list(ValueCategory),
             "status_labels": STATUS_LABELS,
             "category_labels": CATEGORY_LABELS,

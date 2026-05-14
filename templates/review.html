@@ -648,6 +648,7 @@
   </style>
 </head>
 <body>
+  {% set release_published = release.publication_status.value == "published" %}
   <div class="page">
     <section class="hero">
       <div class="hero-top">
@@ -676,24 +677,37 @@
     <section class="action-bar">
       <div class="action-row">
         <div class="action-copy">
-          <strong>Финальный шаг по релизу</strong>
-          <small>Когда все пункты подтверждены или исключены, можно открывать чистовой дайджест.</small>
+          {% if release.publication_status.value == "published" %}
+            <strong>Дайджест опубликован</strong>
+            <small>Опубликовал: {{ release.published_by }}{% if release.published_at %}, {{ release.published_at }}{% endif %}. Релиз закрыт для редактирования.</small>
+          {% elif release.publication_status.value == "preview" %}
+            <strong>Preview сформирован</strong>
+            <small>{{ release.publication_status_note or "Проверьте страницу preview перед публикацией." }}</small>
+          {% else %}
+            <strong>Дайджест в подготовке</strong>
+            <small>{{ release.publication_status_note or "Когда все пункты подтверждены или исключены, сформируйте preview." }}</small>
+          {% endif %}
         </div>
         <div class="action-buttons">
-          <a
-            href="/digest/{{ release.id }}"
-            class="button button-primary"
-            id="confirm-digest-button"
-            data-release-id="{{ release.id }}"
-          >
-            Подтвердить дайджест
-          </a>
-          <form method="post" action="/review/{{ release.id }}/notify-review">
-            <button type="submit" class="button button-subtle">Отправить статус ревью в Telegram</button>
-          </form>
-          <form method="post" action="/review/{{ release.id }}/notify-digest">
-            <button type="submit" class="button button-dark" {% if not digest_ready %}disabled{% endif %}>Отправить готовый дайджест в Telegram</button>
-          </form>
+          {% if release.publication_status.value == "published" %}
+            <a href="/digest/{{ release.id }}" class="button button-primary">Открыть опубликованный дайджест</a>
+          {% elif release.publication_status.value == "preview" %}
+            <a href="/review/{{ release.id }}/digest-preview" class="button button-primary">Открыть preview</a>
+            <form method="post" action="/review/{{ release.id }}/publish-digest">
+              <button type="submit" class="button button-dark" {% if not digest_ready %}disabled{% endif %}>Опубликовать дайджест</button>
+            </form>
+            <form method="post" action="/review/{{ release.id }}/return-digest-to-review">
+              <button type="submit" class="button button-subtle">Вернуться к ревью</button>
+            </form>
+            <small class="publish-hint">Публикация зафиксирует версию и закроет релиз от редактирования.</small>
+          {% else %}
+            <form method="post" action="/review/{{ release.id }}/prepare-digest-preview" id="confirm-digest-button" data-release-id="{{ release.id }}">
+              <button type="submit" class="button button-primary" {% if not digest_ready %}disabled{% endif %}>Сформировать preview</button>
+            </form>
+            <form method="post" action="/review/{{ release.id }}/notify-review">
+              <button type="submit" class="button button-subtle">Отправить статус ревью в Telegram</button>
+            </form>
+          {% endif %}
         </div>
       </div>
       <div class="filter-row" data-filter-bar>
@@ -717,6 +731,14 @@
       <div class="flash success">Изображение добавлено к пункту дайджеста.</div>
     {% elif flash == "digest_not_ready" %}
       <div class="flash error">Дайджест пока нельзя отправить: сначала подтвердите summary и приведите все пункты в финальный статус.</div>
+    {% elif flash == "preview_returned" %}
+      <div class="flash success">Preview отменен. Можно продолжить ревью.</div>
+    {% elif flash == "preview_required" %}
+      <div class="flash error">Сначала сформируйте preview и проверьте его перед публикацией.</div>
+    {% elif flash == "publish_media_error" %}
+      <div class="flash error">Не удалось опубликовать дайджест: один из медиафайлов недоступен.</div>
+    {% elif flash == "release_published" %}
+      <div class="flash success">Дайджест уже опубликован. Редактирование закрыто.</div>
     {% endif %}
 
     <div class="layout">
@@ -735,40 +757,47 @@
           <span class="status-pill status-{{ release.summary_status.value }}">{{ status_labels[release.summary_status] }}</span>
         </div>
 
-        <form
-          method="post"
-          action="/review/{{ release.id }}/summary"
-          class="grid"
-          data-review-form
-          data-form-kind="summary"
-          data-lock-object-type="summary"
-          data-lock-object-id="{{ release.id }}"
-        >
-          <input type="hidden" name="object_version" value="{{ release.version }}" data-object-version>
-          <div class="lock-banner" data-lock-banner hidden>
-            <span data-lock-message></span>
-            <button type="button" class="button button-subtle" data-lock-takeover>Редактировать всё равно</button>
-          </div>
+        {% if release_published %}
           <div class="field-group">
-            <label for="summary">Текст summary</label>
-            <textarea name="summary" id="summary">{{ release.summary }}</textarea>
+            <label>Текст summary</label>
+            <p class="helper-text">{{ release.summary }}</p>
           </div>
-
-          <div class="field-row">
-            <div class="field-group">
-              <label for="summary_status">Статус summary</label>
-              <select name="summary_status" id="summary_status" data-summary-status-select>
-                {% for status in summary_statuses %}
-                  <option value="{{ status.value }}" {% if release.summary_status == status %}selected{% endif %}>{{ status_labels[status] }}</option>
-                {% endfor %}
-              </select>
+        {% else %}
+          <form
+            method="post"
+            action="/review/{{ release.id }}/summary"
+            class="grid"
+            data-review-form
+            data-form-kind="summary"
+            data-lock-object-type="summary"
+            data-lock-object-id="{{ release.id }}"
+          >
+            <input type="hidden" name="object_version" value="{{ release.version }}" data-object-version>
+            <div class="lock-banner" data-lock-banner hidden>
+              <span data-lock-message></span>
+              <button type="button" class="button button-subtle" data-lock-takeover>Редактировать всё равно</button>
             </div>
-          </div>
+            <div class="field-group">
+              <label for="summary">Текст summary</label>
+              <textarea name="summary" id="summary">{{ release.summary }}</textarea>
+            </div>
 
-          <div>
-            <button type="submit" class="button button-save" data-save-button disabled>Сохранить изменения</button>
-          </div>
-        </form>
+            <div class="field-row">
+              <div class="field-group">
+                <label for="summary_status">Статус summary</label>
+                <select name="summary_status" id="summary_status" data-summary-status-select>
+                  {% for status in summary_statuses %}
+                    <option value="{{ status.value }}" {% if release.summary_status == status %}selected{% endif %}>{{ status_labels[status] }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <button type="submit" class="button button-save" data-save-button disabled>Сохранить изменения</button>
+            </div>
+          </form>
+        {% endif %}
       </section>
 
       <div class="stack">
@@ -819,98 +848,113 @@
               <span class="status-pill status-{{ item.status.value }}" data-status-pill>{{ status_labels[item.status] }}</span>
             </div>
 
-            <form
-              method="post"
-              action="/review/{{ release.id }}/items/{{ item.id }}"
-              class="grid"
-              data-review-form
-              data-item-form
-              data-lock-object-type="item"
-              data-lock-object-id="{{ item.id }}"
-            >
-              <input type="hidden" name="object_version" value="{{ item.version }}" data-object-version>
-              <div class="lock-banner" data-lock-banner hidden>
-                <span data-lock-message></span>
-                <button type="button" class="button button-subtle" data-lock-takeover>Редактировать всё равно</button>
-              </div>
-              <div class="field-group">
-                <label for="title-{{ item.id }}">Заголовок</label>
-                <input type="text" name="title" id="title-{{ item.id }}" value="{{ item.title }}">
-                <div class="helper-text">Оставляем только бизнес-смысл без префиксов задачи, кодов и внутренней нумерации.</div>
-              </div>
-
-              {% if not is_descriptionless %}
-                <div class="field-group">
-                  <label for="description-{{ item.id }}">Описание</label>
-                  <textarea name="description" id="description-{{ item.id }}">{{ item.description }}</textarea>
-                </div>
-              {% endif %}
-
+            {% if release_published %}
               <div class="field-row">
                 <div class="field-group">
-                  <label for="category-{{ item.id }}">Категория ценности</label>
-                  <select name="category" id="category-{{ item.id }}">
-                    <option value="">Не выбрано</option>
-                    {% for category in categories %}
-                      <option value="{{ category.value }}" {% if item.category == category %}selected{% endif %}>{{ category_labels[category] }}</option>
-                    {% endfor %}
-                  </select>
+                  <label>Категория ценности</label>
+                  <p class="helper-text">{{ category_labels[item.category] if item.category else "Не выбрано" }}</p>
                 </div>
-
+                {% if not is_descriptionless %}
+                  <div class="field-group">
+                    <label>Описание</label>
+                    <p class="helper-text">{{ item.description }}</p>
+                  </div>
+                {% endif %}
+              </div>
+            {% else %}
+              <form
+                method="post"
+                action="/review/{{ release.id }}/items/{{ item.id }}"
+                class="grid"
+                data-review-form
+                data-item-form
+                data-lock-object-type="item"
+                data-lock-object-id="{{ item.id }}"
+              >
+                <input type="hidden" name="object_version" value="{{ item.version }}" data-object-version>
+                <div class="lock-banner" data-lock-banner hidden>
+                  <span data-lock-message></span>
+                  <button type="button" class="button button-subtle" data-lock-takeover>Редактировать всё равно</button>
+                </div>
                 <div class="field-group">
-                  <label for="status-{{ item.id }}">Статус ревью</label>
-                  <select name="status" id="status-{{ item.id }}" data-status-select>
-                    {% for status in editable_statuses %}
-                      <option value="{{ status.value }}" {% if item.status == status %}selected{% endif %}>{{ status_labels[status] }}</option>
-                    {% endfor %}
-                  </select>
+                  <label for="title-{{ item.id }}">Заголовок</label>
+                  <input type="text" name="title" id="title-{{ item.id }}" value="{{ item.title }}">
+                  <div class="helper-text">Оставляем только бизнес-смысл без префиксов задачи, кодов и внутренней нумерации.</div>
                 </div>
-              </div>
 
-              <div class="toggle-row">
-                <label class="checkbox">
-                  <input type="checkbox" name="is_paid_feature" {% if item.is_paid_feature %}checked{% endif %}>
-                  Отметить как платную фичу
-                </label>
-                <label class="checkbox accent">
-                  <input type="checkbox" name="exclude_from_release" data-exclude-toggle {% if is_excluded %}checked{% endif %}>
-                  Исключить из релиза
-                </label>
-              </div>
+                {% if not is_descriptionless %}
+                  <div class="field-group">
+                    <label for="description-{{ item.id }}">Описание</label>
+                    <textarea name="description" id="description-{{ item.id }}">{{ item.description }}</textarea>
+                  </div>
+                {% endif %}
 
-              <div class="source-links">
-                <strong>Источники:</strong>
-                {% for url in item.tracker_urls %}
-                  <a href="{{ url }}" class="source-link" target="_blank" rel="noreferrer">
-                    {{ item.source_item_ids[loop.index0] if loop.index0 < item.source_item_ids|length else ('Задача ' ~ loop.index) }}
-                  </a>
-                {% endfor %}
-              </div>
+                <div class="field-row">
+                  <div class="field-group">
+                    <label for="category-{{ item.id }}">Категория ценности</label>
+                    <select name="category" id="category-{{ item.id }}">
+                      <option value="">Не выбрано</option>
+                      {% for category in categories %}
+                        <option value="{{ category.value }}" {% if item.category == category %}selected{% endif %}>{{ category_labels[category] }}</option>
+                      {% endfor %}
+                    </select>
+                  </div>
 
-              <div>
-                <button type="submit" class="button button-save" data-save-button disabled>Сохранить изменения</button>
-              </div>
-            </form>
-
-            <form method="post" action="/review/{{ release.id }}/items/{{ item.id }}/image" enctype="multipart/form-data" class="grid upload-row" style="margin-top: 18px;">
-              <div class="field-group" style="flex: 1 1 300px;">
-                <label for="image-{{ item.id }}">Добавить изображение или видео</label>
-                <input
-                  type="file"
-                  name="image"
-                  id="image-{{ item.id }}"
-                  accept=".jpg,.jpeg,.png,.webp,.gif,.mp4,.webm,image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm"
-                  data-media-input
-                >
-                <div class="upload-hint">
-                  <strong>Ограничения:</strong> JPG/JPEG, PNG, WEBP до {{ media_limits.image_mb }} МБ; GIF до {{ media_limits.gif_mb }} МБ; MP4 и WEBM до {{ media_limits.video_mb }} МБ.
-                  Для картинок включено автосжатие и конвертация в WEBP перед загрузкой, чтобы страница работала быстрее.
+                  <div class="field-group">
+                    <label for="status-{{ item.id }}">Статус ревью</label>
+                    <select name="status" id="status-{{ item.id }}" data-status-select>
+                      {% for status in editable_statuses %}
+                        <option value="{{ status.value }}" {% if item.status == status %}selected{% endif %}>{{ status_labels[status] }}</option>
+                      {% endfor %}
+                    </select>
+                  </div>
                 </div>
-              </div>
-              <div style="align-self: end;">
-                <button type="submit" class="button button-subtle">Загрузить изображение</button>
-              </div>
-            </form>
+
+                <div class="toggle-row">
+                  <label class="checkbox">
+                    <input type="checkbox" name="is_paid_feature" {% if item.is_paid_feature %}checked{% endif %}>
+                    Отметить как платную фичу
+                  </label>
+                  <label class="checkbox accent">
+                    <input type="checkbox" name="exclude_from_release" data-exclude-toggle {% if is_excluded %}checked{% endif %}>
+                    Исключить из релиза
+                  </label>
+                </div>
+
+                <div class="source-links">
+                  <strong>Источники:</strong>
+                  {% for url in item.tracker_urls %}
+                    <a href="{{ url }}" class="source-link" target="_blank" rel="noreferrer">
+                      {{ item.source_item_ids[loop.index0] if loop.index0 < item.source_item_ids|length else ('Задача ' ~ loop.index) }}
+                    </a>
+                  {% endfor %}
+                </div>
+
+                <div>
+                  <button type="submit" class="button button-save" data-save-button disabled>Сохранить изменения</button>
+                </div>
+              </form>
+
+              <form method="post" action="/review/{{ release.id }}/items/{{ item.id }}/image" enctype="multipart/form-data" class="grid upload-row" style="margin-top: 18px;">
+                <div class="field-group" style="flex: 1 1 300px;">
+                  <label for="image-{{ item.id }}">Добавить изображение или видео</label>
+                  <input
+                    type="file"
+                    name="image"
+                    id="image-{{ item.id }}"
+                    accept=".jpg,.jpeg,.png,.webp,.gif,.mp4,.webm,image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm"
+                    data-media-input
+                  >
+                  <div class="upload-hint">
+                    <strong>Ограничения:</strong> JPG/JPEG, PNG, WEBP до {{ media_limits.image_mb }} МБ; GIF до {{ media_limits.gif_mb }} МБ; MP4 и WEBM до {{ media_limits.video_mb }} МБ.
+                    Для картинок включено автосжатие и конвертация в WEBP перед загрузкой, чтобы страница работала быстрее.
+                  </div>
+                </div>
+                <div style="align-self: end;">
+                  <button type="submit" class="button button-subtle">Загрузить изображение</button>
+                </div>
+              </form>
+            {% endif %}
 
             {% if item.image_paths %}
               <div class="image-gallery" data-media-gallery>
@@ -934,10 +978,12 @@
                           Изображение для ревью
                         {% endif %}
                       </span>
-                      <form method="post" action="/review/{{ release.id }}/items/{{ item.id }}/image/delete" data-delete-media-form>
-                        <input type="hidden" name="image_path" value="{{ image_path }}">
-                        <button type="submit" class="button button-subtle">Удалить файл</button>
-                      </form>
+                      {% if not release_published %}
+                        <form method="post" action="/review/{{ release.id }}/items/{{ item.id }}/image/delete" data-delete-media-form>
+                          <input type="hidden" name="image_path" value="{{ image_path }}">
+                          <button type="submit" class="button button-subtle">Удалить файл</button>
+                        </form>
+                      {% endif %}
                     </div>
                   </div>
                 {% endfor %}
@@ -982,54 +1028,58 @@
                   <span class="status-pill status-{{ item.status.value }}" data-status-pill>Вне релиза</span>
                 </div>
 
-                <form
-                  method="post"
-                  action="/review/{{ release.id }}/items/{{ item.id }}"
-                  class="grid"
-                  data-review-form
-                  data-item-form
-                  data-lock-object-type="item"
-                  data-lock-object-id="{{ item.id }}"
-                >
-                  <input type="hidden" name="object_version" value="{{ item.version }}" data-object-version>
-                  <div class="lock-banner" data-lock-banner hidden>
-                    <span data-lock-message></span>
-                    <button type="button" class="button button-subtle" data-lock-takeover>Редактировать всё равно</button>
-                  </div>
-                  <div class="field-group">
-                    <label for="title-{{ item.id }}">Заголовок</label>
-                    <input type="text" name="title" id="title-{{ item.id }}" value="{{ item.title }}">
-                    <div class="helper-text">Модуль и связь с исходной задачей сохраняются. На этом шаге нужно только решить, переводим ли пункт в релиз.</div>
-                  </div>
-
-                  <input type="hidden" name="description" value="">
-                  <input type="hidden" name="category" value="">
-                  <input type="hidden" name="status" value="{{ approved_status }}">
-
-                  <div class="field-row">
-                    <div class="field-group">
-                      <label for="release_candidate_action-{{ item.id }}">Решение по задаче</label>
-                      <select name="release_candidate_action" id="release_candidate_action-{{ item.id }}">
-                        <option value="">Оставить вне релиза</option>
-                        <option value="new_feature">Включить в релиз как новую фичу</option>
-                        <option value="change">Включить в релиз как изменение</option>
-                      </select>
+                {% if release_published %}
+                  <p class="helper-text">Решения по кандидатам зафиксированы: релиз опубликован и закрыт для редактирования.</p>
+                {% else %}
+                  <form
+                    method="post"
+                    action="/review/{{ release.id }}/items/{{ item.id }}"
+                    class="grid"
+                    data-review-form
+                    data-item-form
+                    data-lock-object-type="item"
+                    data-lock-object-id="{{ item.id }}"
+                  >
+                    <input type="hidden" name="object_version" value="{{ item.version }}" data-object-version>
+                    <div class="lock-banner" data-lock-banner hidden>
+                      <span data-lock-message></span>
+                      <button type="button" class="button button-subtle" data-lock-takeover>Редактировать всё равно</button>
                     </div>
-                  </div>
+                    <div class="field-group">
+                      <label for="title-{{ item.id }}">Заголовок</label>
+                      <input type="text" name="title" id="title-{{ item.id }}" value="{{ item.title }}">
+                      <div class="helper-text">Модуль и связь с исходной задачей сохраняются. На этом шаге нужно только решить, переводим ли пункт в релиз.</div>
+                    </div>
 
-                  <div class="source-links">
-                    <strong>Источники:</strong>
-                    {% for url in item.tracker_urls %}
-                      <a href="{{ url }}" class="source-link" target="_blank" rel="noreferrer">
-                        {{ item.source_item_ids[loop.index0] if loop.index0 < item.source_item_ids|length else ('Задача ' ~ loop.index) }}
-                      </a>
-                    {% endfor %}
-                  </div>
+                    <input type="hidden" name="description" value="">
+                    <input type="hidden" name="category" value="">
+                    <input type="hidden" name="status" value="{{ approved_status }}">
 
-                  <div>
-                    <button type="submit" class="button button-save" data-save-button disabled>Сохранить решение</button>
-                  </div>
-                </form>
+                    <div class="field-row">
+                      <div class="field-group">
+                        <label for="release_candidate_action-{{ item.id }}">Решение по задаче</label>
+                        <select name="release_candidate_action" id="release_candidate_action-{{ item.id }}">
+                          <option value="">Оставить вне релиза</option>
+                          <option value="new_feature">Включить в релиз как новую фичу</option>
+                          <option value="change">Включить в релиз как изменение</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div class="source-links">
+                      <strong>Источники:</strong>
+                      {% for url in item.tracker_urls %}
+                        <a href="{{ url }}" class="source-link" target="_blank" rel="noreferrer">
+                          {{ item.source_item_ids[loop.index0] if loop.index0 < item.source_item_ids|length else ('Задача ' ~ loop.index) }}
+                        </a>
+                      {% endfor %}
+                    </div>
+
+                    <div>
+                      <button type="submit" class="button button-save" data-save-button disabled>Сохранить решение</button>
+                    </div>
+                  </form>
+                {% endif %}
               </article>
             {% endfor %}
           </section>
