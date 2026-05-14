@@ -1,5 +1,6 @@
 import importlib
 import io
+import json
 import os
 import tempfile
 import unittest
@@ -8,7 +9,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 from fastapi.responses import Response
 
-from app.models import DigestItem, DigestRelease, GroupingMode, ItemStatus, ItemType, SourceItem, SummaryStatus, ValueCategory
+from app.models import DigestItem, DigestRelease, GroupingMode, ItemStatus, ItemType, PublicationStatus, SourceItem, SummaryStatus, ValueCategory
 from app.session import SESSION_COOKIE_NAME, save_session
 
 
@@ -88,6 +89,25 @@ class ReviewPageLogicTests(unittest.TestCase):
         )
 
         self.assertEqual(item_type, ItemType.RELEASE_CANDIDATE)
+
+    def test_client_value_category_labels_are_human_readable(self) -> None:
+        from app.models import ValueCategory
+        from app.review_utils import CLIENT_CATEGORY_LABELS
+
+        self.assertEqual(CLIENT_CATEGORY_LABELS[ValueCategory.TIME_SAVING], "Экономия времени")
+        self.assertEqual(CLIENT_CATEGORY_LABELS[ValueCategory.ERROR_REDUCTION], "Меньше ошибок")
+        self.assertEqual(CLIENT_CATEGORY_LABELS[ValueCategory.CLARITY_TRANSPARENCY], "Больше прозрачности")
+        self.assertEqual(CLIENT_CATEGORY_LABELS[ValueCategory.DAILY_WORK_CONVENIENCE], "Удобнее в ежедневной работе")
+        self.assertEqual(CLIENT_CATEGORY_LABELS[ValueCategory.BETTER_CONTROL], "Больше контроля")
+        self.assertEqual(CLIENT_CATEGORY_LABELS[ValueCategory.LESS_COMMUNICATION_OVERHEAD], "Меньше ручных согласований")
+
+    def test_digest_media_helper_detects_video_paths(self) -> None:
+        from app.review_utils import is_video_media_path
+
+        self.assertTrue(is_video_media_path("/uploads/demo.mp4"))
+        self.assertTrue(is_video_media_path("/uploads/demo.WEBM"))
+        self.assertFalse(is_video_media_path("/uploads/demo.png"))
+        self.assertFalse(is_video_media_path(""))
 
 
 class DigestGuardTests(unittest.TestCase):
@@ -170,6 +190,21 @@ class DigestGuardTests(unittest.TestCase):
         )
         client.cookies.set(SESSION_COOKIE_NAME, response.headers["set-cookie"].split(";", 1)[0].split("=", 1)[1])
 
+    def _set_release_preview_ready(self) -> None:
+        release = self.storage.get_release("2026-04")
+        self.storage.update_release_summary(
+            "2026-04",
+            release.summary,
+            SummaryStatus.APPROVED.value,
+            expected_version=release.version,
+        )
+        self.storage.update_release_publication_status(
+            "2026-04",
+            PublicationStatus.PREVIEW,
+            note="Preview сформирован.",
+            preview_prepared_by="Employee",
+        )
+
     def tearDown(self) -> None:
         self.client.close()
         self.temp_dir.cleanup()
@@ -178,7 +213,8 @@ class DigestGuardTests(unittest.TestCase):
         response = self.client.get("/review/2026-04")
 
         self.assertEqual(response.status_code, 200)
-        self.assertIn("Подтвердить дайджест", response.text)
+        self.assertIn("Дайджест в подготовке", response.text)
+        self.assertIn("Сформировать preview", response.text)
         self.assertIn("Сохранить изменения", response.text)
         self.assertIn("Исключить из релиза", response.text)
         self.assertIn("Категория ценности", response.text)
@@ -186,11 +222,436 @@ class DigestGuardTests(unittest.TestCase):
         self.assertIn("На странице сейчас", response.text)
         self.assertNotIn("Выйти из ревью", response.text)
 
+    def test_release_defaults_to_draft_publication_status(self) -> None:
+        release = self.storage.get_release("2026-04")
+
+        self.assertEqual(release.publication_status, PublicationStatus.DRAFT)
+        self.assertEqual(release.publication_status_note, "")
+        self.assertEqual(release.preview_prepared_by, "")
+        self.assertEqual(release.preview_prepared_at, "")
+
+    def test_publication_status_can_be_updated_with_a_note(self) -> None:
+        self.storage.update_release_publication_status(
+            release_id="2026-04",
+            status=PublicationStatus.PREVIEW,
+            note="Preview сформирован.",
+            preview_prepared_by="Employee",
+        )
+
+        release = self.storage.get_release("2026-04")
+
+        self.assertEqual(release.publication_status, PublicationStatus.PREVIEW)
+        self.assertEqual(release.publication_status_note, "Preview сформирован.")
+        self.assertEqual(release.preview_prepared_by, "Employee")
+        self.assertNotEqual(release.preview_prepared_at, "")
+
+    def test_published_digest_snapshot_round_trips(self) -> None:
+        from app.models import PublishedDigest
+
+        snapshot = PublishedDigest(
+            release_id="2026-04",
+            release_date="2026-04-30",
+            summary="Published summary",
+            content={
+                "sections": [
+                    {
+                        "id": "new_features",
+                        "title": "Что нового",
+                        "items": [{"title": "Published feature", "media": []}],
+                    }
+                ],
+                "metrics": {"items_count": 1},
+            },
+            published_by="Employee",
+            published_at="1710000000",
+        )
+
+        self.storage.save_published_digest(snapshot)
+        loaded = self.storage.get_published_digest("2026-04")
+        archive = self.storage.list_published_digests()
+
+        self.assertEqual(loaded.release_id, "2026-04")
+        self.assertEqual(loaded.summary, "Published summary")
+        self.assertEqual(loaded.content["sections"][0]["items"][0]["title"], "Published feature")
+        self.assertEqual(loaded.published_by, "Employee")
+        self.assertEqual(archive[0].release_id, "2026-04")
+
+    def test_publication_snapshot_contains_card_fields_and_copies_media(self) -> None:
+        media_source = self.config.UPLOADS_DIR / "source.png"
+        media_source.write_bytes(b"image-bytes")
+        self.storage.update_item(
+            item_id="item-1",
+            title="Feature title",
+            description="Feature description",
+            category=ValueCategory.TIME_SAVING.value,
+            status=ItemStatus.APPROVED.value,
+            is_paid_feature=True,
+        )
+        self.storage.add_item_image("item-1", "/uploads/source.png")
+
+        from app.services.publication import build_published_digest_snapshot
+
+        release = self.storage.get_release("2026-04")
+        items = self.storage.list_items("2026-04")
+        snapshot = build_published_digest_snapshot(
+            release=release,
+            items=items,
+            published_by="Employee",
+            uploads_dir=self.config.UPLOADS_DIR,
+        )
+
+        first_item = snapshot.content["sections"][0]["items"][0]
+        self.assertEqual(first_item["title"], "Feature title")
+        self.assertEqual(first_item["module"], "Core")
+        self.assertEqual(first_item["value_category_label"], "Экономия времени")
+        self.assertEqual(first_item["is_paid_feature"], True)
+        self.assertEqual(len(first_item["media"]), 1)
+        self.assertTrue(first_item["media"][0]["path"].startswith("/uploads/published/2026-04/"))
+        copied_path = self.config.UPLOADS_DIR / Path(first_item["media"][0]["path"].replace("/uploads/", ""))
+        self.assertEqual(copied_path.read_bytes(), b"image-bytes")
+
+    def test_publication_snapshot_fails_when_media_file_is_missing(self) -> None:
+        self.storage.update_item(
+            item_id="item-1",
+            title="Feature title",
+            description="Feature description",
+            category=ValueCategory.TIME_SAVING.value,
+            status=ItemStatus.APPROVED.value,
+            is_paid_feature=False,
+        )
+        self.storage.add_item_image("item-1", "/uploads/missing.png")
+
+        from app.services.publication import PublicationError, build_published_digest_snapshot
+
+        release = self.storage.get_release("2026-04")
+        items = self.storage.list_items("2026-04")
+        with self.assertRaises(PublicationError):
+            build_published_digest_snapshot(
+                release=release,
+                items=items,
+                published_by="Employee",
+                uploads_dir=self.config.UPLOADS_DIR,
+            )
+
+    def test_prepare_preview_requires_ready_release(self) -> None:
+        response = self.client.post("/review/2026-04/prepare-digest-preview", follow_redirects=False)
+
+        self.assertEqual(response.status_code, 303)
+        self.assertIn("digest_not_ready", response.headers["location"])
+        self.assertEqual(self.storage.get_release("2026-04").publication_status, PublicationStatus.DRAFT)
+
+    def test_prepare_preview_sets_preview_status_when_ready(self) -> None:
+        self.storage.update_item(
+            item_id="item-1",
+            title="Feature title",
+            description="Feature description",
+            category=ValueCategory.TIME_SAVING.value,
+            status=ItemStatus.APPROVED.value,
+            is_paid_feature=False,
+        )
+
+        response = self.client.post("/review/2026-04/prepare-digest-preview", follow_redirects=False)
+
+        self.assertEqual(response.status_code, 303)
+        self.assertIn("/review/2026-04/digest-preview", response.headers["location"])
+        release = self.storage.get_release("2026-04")
+        self.assertEqual(release.publication_status, PublicationStatus.PREVIEW)
+        self.assertEqual(release.preview_prepared_by, "Employee")
+
+    def test_review_edit_resets_preview_to_draft_with_explanation(self) -> None:
+        self.storage.update_release_publication_status(
+            "2026-04",
+            PublicationStatus.PREVIEW,
+            note="Preview сформирован.",
+            preview_prepared_by="Employee",
+        )
+        item = self.storage.get_item("item-1")
+
+        response = self.client.post(
+            "/review/2026-04/items/item-1",
+            data={
+                "title": "Updated title",
+                "description": "Updated description",
+                "category": "",
+                "status": "approved",
+                "object_version": str(item.version),
+            },
+            follow_redirects=False,
+        )
+
+        self.assertEqual(response.status_code, 303)
+        release = self.storage.get_release("2026-04")
+        self.assertEqual(release.publication_status, PublicationStatus.DRAFT)
+        self.assertIn("Preview сброшен", release.publication_status_note)
+
+    def test_published_release_blocks_review_edits(self) -> None:
+        self.storage.update_release_publication_status(
+            "2026-04",
+            PublicationStatus.PUBLISHED,
+            note="Дайджест опубликован.",
+            published_by="Employee",
+        )
+        item = self.storage.get_item("item-1")
+
+        response = self.client.post(
+            "/review/2026-04/items/item-1",
+            data={
+                "title": "Should not save",
+                "description": "Should not save",
+                "category": "",
+                "status": "approved",
+                "object_version": str(item.version),
+            },
+            headers={"X-Requested-With": "XMLHttpRequest"},
+        )
+
+        self.assertEqual(response.status_code, 409)
+        self.assertIn("уже опубликован", response.json()["message"])
+        self.assertNotEqual(self.storage.get_item("item-1").title, "Should not save")
+
+    def test_digest_public_page_shows_preparation_until_published(self) -> None:
+        response = self.client.get("/digest/2026-04")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Дайджест в подготовке", response.text)
+        self.assertNotIn("Feature title", response.text)
+
+    def test_preview_route_requires_preview_status(self) -> None:
+        response = self.client.get("/review/2026-04/digest-preview")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Preview еще не сформирован", response.text)
+
+    def test_preview_route_renders_live_approved_data(self) -> None:
+        self.storage.update_item(
+            item_id="item-1",
+            title="Preview feature",
+            description="Preview description",
+            category=ValueCategory.TIME_SAVING.value,
+            status=ItemStatus.APPROVED.value,
+            is_paid_feature=False,
+        )
+        self.storage.update_release_publication_status(
+            "2026-04",
+            PublicationStatus.PREVIEW,
+            note="Preview сформирован.",
+            preview_prepared_by="Employee",
+        )
+
+        response = self.client.get("/review/2026-04/digest-preview")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Предпросмотр", response.text)
+        self.assertIn("Preview feature", response.text)
+        self.assertIn("Опубликовать дайджест", response.text)
+
+    def test_public_digest_reads_published_snapshot_not_live_review(self) -> None:
+        from app.models import PublishedDigest
+
+        self.storage.save_published_digest(
+            PublishedDigest(
+                release_id="2026-04",
+                release_date="2026-04-30",
+                summary="Published summary",
+                content={
+                    "sections": [
+                        {
+                            "id": "new_features",
+                            "title": "Что нового",
+                            "collapsed": False,
+                            "items": [{"title": "Snapshot feature", "description": "Snapshot text", "module": "Core", "value_category_label": "", "is_paid_feature": False, "media": []}],
+                        }
+                    ],
+                    "metrics": {"items_count": 1, "product_items_count": 1},
+                },
+                published_by="Employee",
+                published_at="1710000000",
+            )
+        )
+        self.storage.update_release_publication_status(
+            "2026-04",
+            PublicationStatus.PUBLISHED,
+            note="Дайджест опубликован.",
+            published_by="Employee",
+        )
+        self.storage.update_release_publication_status(
+            "2026-04",
+            PublicationStatus.DRAFT,
+            note="",
+        )
+        self.storage.update_item(
+            item_id="item-1",
+            title="Live changed feature",
+            description="Live text",
+            category="",
+            status=ItemStatus.APPROVED.value,
+            is_paid_feature=False,
+        )
+
+        response = self.client.get("/digest/2026-04")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Snapshot feature", response.text)
+        self.assertNotIn("Live changed feature", response.text)
+        self.assertNotIn("Employee", response.text)
+
+    def test_archive_lists_only_published_snapshots(self) -> None:
+        from app.models import PublishedDigest
+
+        self.storage.save_published_digest(
+            PublishedDigest(
+                release_id="2026-04",
+                release_date="2026-04-30",
+                summary="Published summary",
+                content={"sections": [], "metrics": {"items_count": 0, "product_items_count": 0}},
+                published_by="Employee",
+                published_at="1710000000",
+            )
+        )
+
+        response = self.client.get("/digests")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Архив дайджестов", response.text)
+        self.assertIn("2026-04", response.text)
+        self.assertIn("Published summary", response.text)
+
+    def test_review_page_shows_prepare_preview_action_when_ready(self) -> None:
+        self.storage.update_item(
+            item_id="item-1",
+            title="Feature title",
+            description="Feature description",
+            category=ValueCategory.TIME_SAVING.value,
+            status=ItemStatus.APPROVED.value,
+            is_paid_feature=False,
+        )
+
+        response = self.client.get("/review/2026-04")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Сформировать preview", response.text)
+        self.assertNotIn("Отправить готовый дайджест в Telegram", response.text)
+
+    def test_review_page_shows_publish_action_in_preview_state(self) -> None:
+        self.storage.update_release_publication_status(
+            "2026-04",
+            PublicationStatus.PREVIEW,
+            note="Preview сформирован.",
+            preview_prepared_by="Employee",
+        )
+
+        response = self.client.get("/review/2026-04")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Открыть preview", response.text)
+        self.assertIn("Опубликовать дайджест", response.text)
+        self.assertIn("зафиксирует версию и закроет релиз", response.text)
+
+    def test_review_page_shows_published_audit_and_open_digest_action(self) -> None:
+        self.storage.update_release_publication_status(
+            "2026-04",
+            PublicationStatus.PUBLISHED,
+            note="Дайджест опубликован.",
+            published_by="Employee",
+        )
+
+        response = self.client.get("/review/2026-04")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Дайджест опубликован", response.text)
+        self.assertIn("Employee", response.text)
+        self.assertIn("Открыть опубликованный дайджест", response.text)
+        self.assertNotIn("Сформировать preview", response.text)
+
+    def test_public_digest_uses_brand_assets_and_toc(self) -> None:
+        from app.models import PublishedDigest
+
+        self.storage.save_published_digest(
+            PublishedDigest(
+                release_id="2026-04",
+                release_date="2026-04-30",
+                summary="Published summary",
+                content={
+                    "sections": [
+                        {
+                            "id": "new_features",
+                            "title": "Что нового",
+                            "collapsed": False,
+                            "items": [
+                                {
+                                    "title": "Snapshot feature",
+                                    "description": "Snapshot text",
+                                    "module": "Core",
+                                    "value_category_label": "Экономия времени",
+                                    "is_paid_feature": True,
+                                    "media": [],
+                                }
+                            ],
+                        }
+                    ],
+                    "metrics": {"items_count": 1, "product_items_count": 1},
+                },
+                published_by="Employee",
+                published_at="1710000000",
+            )
+        )
+
+        response = self.client.get("/digest/2026-04")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("/static/brand/Logo_Skillaz_RGB.svg", response.text)
+        self.assertIn("Подбор", response.text)
+        self.assertIn("Оглавление", response.text)
+        self.assertIn("#49DE4E", response.text)
+
+    def test_multiple_media_render_as_carousel(self) -> None:
+        from app.models import PublishedDigest
+
+        self.storage.save_published_digest(
+            PublishedDigest(
+                release_id="2026-04",
+                release_date="2026-04-30",
+                summary="Published summary",
+                content={
+                    "sections": [
+                        {
+                            "id": "new_features",
+                            "title": "Что нового",
+                            "collapsed": False,
+                            "items": [
+                                {
+                                    "title": "Media feature",
+                                    "description": "Snapshot text",
+                                    "module": "Core",
+                                    "value_category_label": "",
+                                    "is_paid_feature": False,
+                                    "media": [
+                                        {"path": "/uploads/published/2026-04/a.png", "kind": "image"},
+                                        {"path": "/uploads/published/2026-04/b.png", "kind": "image"},
+                                    ],
+                                }
+                            ],
+                        }
+                    ],
+                    "metrics": {"items_count": 1, "product_items_count": 1},
+                },
+                published_by="Employee",
+                published_at="1710000000",
+            )
+        )
+
+        response = self.client.get("/digest/2026-04")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('class="media-carousel"', response.text)
+        self.assertIn("data-carousel", response.text)
+
     def test_digest_route_rejects_non_final_items(self) -> None:
         response = self.client.get("/digest/2026-04")
 
-        self.assertEqual(response.status_code, 400)
-        self.assertIn("Не все задачи находятся в статусе подтверждения", response.text)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Дайджест в подготовке", response.text)
+        self.assertNotIn("Feature title", response.text)
 
     def test_release_candidate_does_not_block_digest_when_main_items_are_final(self) -> None:
         self.storage.update_item(
@@ -201,12 +662,200 @@ class DigestGuardTests(unittest.TestCase):
             status=ItemStatus.APPROVED.value,
             is_paid_feature=False,
         )
+        self._set_release_preview_ready()
 
-        response = self.client.get("/digest/2026-04")
+        response = self.client.get("/review/2026-04/digest-preview")
 
         self.assertEqual(response.status_code, 200)
         self.assertIn("Feature title", response.text)
         self.assertNotIn("Candidate title", response.text)
+
+    def test_digest_publishes_only_approved_items_in_public_sections(self) -> None:
+        self.storage.replace_release_items(
+            "2026-04",
+            [
+                DigestItem(
+                    id="feature-approved",
+                    release_id="2026-04",
+                    source_item_ids=["DEV-10"],
+                    title="Approved feature",
+                    description="Client-facing feature text",
+                    module="Подбор",
+                    type=ItemType.NEW_FEATURE,
+                    category=ValueCategory.TIME_SAVING,
+                    status=ItemStatus.APPROVED,
+                    tracker_urls=["https://tracker.yandex.ru/DEV-10"],
+                    grouping_mode=GroupingMode.SINGLE_TASK,
+                ),
+                DigestItem(
+                    id="change-approved",
+                    release_id="2026-04",
+                    source_item_ids=["DEV-11"],
+                    title="Approved change",
+                    description="Client-facing change text",
+                    module="Отчеты",
+                    type=ItemType.CHANGE,
+                    category=ValueCategory.CLARITY_TRANSPARENCY,
+                    status=ItemStatus.APPROVED,
+                    tracker_urls=["https://tracker.yandex.ru/DEV-11"],
+                    grouping_mode=GroupingMode.SINGLE_TASK,
+                ),
+                DigestItem(
+                    id="feature-excluded",
+                    release_id="2026-04",
+                    source_item_ids=["DEV-12"],
+                    title="Excluded feature",
+                    description="Hidden text",
+                    module="Подбор",
+                    type=ItemType.NEW_FEATURE,
+                    category=ValueCategory.TIME_SAVING,
+                    status=ItemStatus.EXCLUDED,
+                    tracker_urls=["https://tracker.yandex.ru/DEV-12"],
+                    grouping_mode=GroupingMode.SINGLE_TASK,
+                ),
+                DigestItem(
+                    id="bugfix-approved",
+                    release_id="2026-04",
+                    source_item_ids=["DEV-13"],
+                    title="Approved fix",
+                    description="",
+                    module="Интеграции",
+                    type=ItemType.BUGFIX,
+                    category=None,
+                    status=ItemStatus.APPROVED,
+                    tracker_urls=["https://tracker.yandex.ru/DEV-13"],
+                    grouping_mode=GroupingMode.SINGLE_TASK,
+                ),
+            ],
+        )
+        self._set_release_preview_ready()
+
+        response = self.client.get("/review/2026-04/digest-preview")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Что нового", response.text)
+        self.assertIn("Что стало удобнее", response.text)
+        self.assertIn("Исправления и технические улучшения", response.text)
+        self.assertIn("Approved feature", response.text)
+        self.assertIn("Approved change", response.text)
+        self.assertIn("Approved fix", response.text)
+        self.assertNotIn("Excluded feature", response.text)
+
+    def test_digest_hides_tracker_links_for_product_items_but_shows_support_links(self) -> None:
+        self.storage.replace_release_items(
+            "2026-04",
+            [
+                DigestItem(
+                    id="feature-approved",
+                    release_id="2026-04",
+                    source_item_ids=["DEV-20"],
+                    title="New analytics",
+                    description="Teams can understand progress faster.",
+                    module="Аналитика",
+                    type=ItemType.NEW_FEATURE,
+                    category=ValueCategory.CLARITY_TRANSPARENCY,
+                    status=ItemStatus.APPROVED,
+                    tracker_urls=["https://tracker.yandex.ru/DEV-20"],
+                    grouping_mode=GroupingMode.SINGLE_TASK,
+                ),
+                DigestItem(
+                    id="bugfix-approved",
+                    release_id="2026-04",
+                    source_item_ids=["DEV-21"],
+                    title="Fixed export",
+                    description="",
+                    module="Экспорт",
+                    type=ItemType.BUGFIX,
+                    category=None,
+                    status=ItemStatus.APPROVED,
+                    tracker_urls=["https://tracker.yandex.ru/DEV-21"],
+                    grouping_mode=GroupingMode.SINGLE_TASK,
+                ),
+            ],
+        )
+        self._set_release_preview_ready()
+
+        response = self.client.get("/review/2026-04/digest-preview")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("New analytics", response.text)
+        self.assertNotIn("https://tracker.yandex.ru/DEV-20", response.text)
+        self.assertIn("https://tracker.yandex.ru/DEV-21", response.text)
+
+    def test_digest_renders_value_badge_and_paid_feature_badge(self) -> None:
+        self.storage.update_item(
+            item_id="item-1",
+            title="Feature title",
+            description="Feature description",
+            category=ValueCategory.TIME_SAVING.value,
+            status=ItemStatus.APPROVED.value,
+            is_paid_feature=True,
+        )
+        self._set_release_preview_ready()
+
+        response = self.client.get("/review/2026-04/digest-preview")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Экономия времени", response.text)
+        self.assertIn("Платная функция", response.text)
+
+    def test_digest_support_section_is_collapsed_by_default(self) -> None:
+        self.storage.replace_release_items(
+            "2026-04",
+            [
+                DigestItem(
+                    id="bugfix-approved",
+                    release_id="2026-04",
+                    source_item_ids=["DEV-30"],
+                    title="Fixed notification",
+                    description="",
+                    module="Уведомления",
+                    type=ItemType.BUGFIX,
+                    category=None,
+                    status=ItemStatus.APPROVED,
+                    tracker_urls=["https://tracker.yandex.ru/DEV-30"],
+                    grouping_mode=GroupingMode.SINGLE_TASK,
+                ),
+            ],
+        )
+        self._set_release_preview_ready()
+
+        response = self.client.get("/review/2026-04/digest-preview")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("<details", response.text)
+        self.assertIn("Исправления и технические улучшения", response.text)
+        self.assertNotIn("<details open", response.text)
+
+    def test_digest_omits_empty_publication_sections(self) -> None:
+        self.storage.replace_release_items(
+            "2026-04",
+            [
+                DigestItem(
+                    id="bugfix-approved",
+                    release_id="2026-04",
+                    source_item_ids=["DEV-40"],
+                    title="Fixed reminder",
+                    description="",
+                    module="Напоминания",
+                    type=ItemType.BUGFIX,
+                    category=None,
+                    status=ItemStatus.APPROVED,
+                    tracker_urls=["https://tracker.yandex.ru/DEV-40"],
+                    grouping_mode=GroupingMode.SINGLE_TASK,
+                ),
+            ],
+        )
+        self._set_release_preview_ready()
+
+        response = self.client.get("/review/2026-04/digest-preview")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("Нет новых фич", response.text)
+        self.assertNotIn("Нет изменений", response.text)
+        self.assertNotIn('id="new-features-heading"', response.text)
+        self.assertNotIn('id="changes-heading"', response.text)
+        self.assertIn("Исправления и технические улучшения", response.text)
 
     def test_item_save_supports_ajax_without_redirect(self) -> None:
         item = self.storage.get_item("item-1")

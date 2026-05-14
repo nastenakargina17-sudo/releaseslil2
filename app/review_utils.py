@@ -13,6 +13,15 @@ CATEGORY_LABELS = {
     ValueCategory.LESS_COMMUNICATION_OVERHEAD: "Меньше лишней коммуникации",
 }
 
+CLIENT_CATEGORY_LABELS = {
+    ValueCategory.TIME_SAVING: "Экономия времени",
+    ValueCategory.ERROR_REDUCTION: "Меньше ошибок",
+    ValueCategory.CLARITY_TRANSPARENCY: "Больше прозрачности",
+    ValueCategory.DAILY_WORK_CONVENIENCE: "Удобнее в ежедневной работе",
+    ValueCategory.BETTER_CONTROL: "Больше контроля",
+    ValueCategory.LESS_COMMUNICATION_OVERHEAD: "Меньше ручных согласований",
+}
+
 STATUS_LABELS = {
     ItemStatus.DRAFT: "Черновик",
     ItemStatus.REVIEWED: "На ревью",
@@ -49,6 +58,10 @@ def normalize_tracker_issue_url(issue_key: str, fallback_url: str) -> str:
     if normalized_key:
         return f"https://tracker.yandex.ru/{normalized_key}"
     return (fallback_url or "").strip()
+
+
+def is_video_media_path(path: str) -> bool:
+    return (path or "").lower().split("?", 1)[0].endswith((".mp4", ".webm"))
 
 
 def default_item_status(item_type: ItemType) -> ItemStatus:

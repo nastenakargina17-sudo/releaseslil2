@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Архив дайджестов</title>
+  <style>
+    @font-face { font-family: "Onest"; src: url("/static/brand/OnestRegular1602-hint.ttf") format("truetype"); font-weight: 400; }
+    @font-face { font-family: "Onest"; src: url("/static/brand/OnestBold1602-hint.ttf") format("truetype"); font-weight: 700; }
+    :root {
+      --white: #FFFFFF;
+      --gray: #EFEFEF;
+      --ink: #09081E;
+      --ink-soft: #1A234A;
+      --muted: #7A85A7;
+      --line: #E6EAF8;
+      --accent: #49DE4E;
+      --accent-soft: #D9FFDB;
+    }
+    * { box-sizing: border-box; }
+    body { font-family: "Onest", Arial, sans-serif; margin: 0; background: var(--gray); color: var(--ink); line-height: 1.55; }
+    .page { max-width: 1180px; margin: 0 auto; padding: 28px 20px 72px; }
+    .brand-row { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 34px; }
+    .brand-logo { width: 132px; max-width: 42vw; }
+    .product-badge { display: inline-flex; align-items: center; padding: 8px 18px; border-radius: 8px; transform: skewX(-14deg); background: var(--accent); color: var(--ink); font-weight: 700; }
+    .product-badge span { transform: skewX(14deg); }
+    .hero { background: var(--white); border: 1px solid var(--line); border-radius: 8px; padding: 42px; margin-bottom: 24px; position: relative; overflow: hidden; }
+    .hero::after { content: ""; position: absolute; right: 8%; bottom: -42px; width: 220px; height: 150px; background: var(--accent-soft); border-radius: 42px; transform: skewX(-18deg); }
+    h1 { position: relative; z-index: 1; margin: 0; font-size: 48px; line-height: 1.05; letter-spacing: 0; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px; }
+    .card { background: var(--white); border: 1px solid var(--line); border-radius: 8px; padding: 22px; position: relative; overflow: hidden; }
+    .card::after { content: ""; position: absolute; right: -40px; top: -30px; width: 140px; height: 90px; background: var(--accent-soft); transform: skewX(-18deg); border-radius: 8px; }
+    .card > * { position: relative; z-index: 1; }
+    .muted { color: var(--muted); font-weight: 700; }
+    a { color: var(--ink); font-weight: 700; }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <div class="brand-row">
+        <img class="brand-logo" src="/static/brand/Logo_Skillaz_RGB.svg" alt="Skillaz">
+        <div class="product-badge"><span>Подбор</span></div>
+      </div>
+      <h1>Архив дайджестов</h1>
+    </section>
+    <div class="grid">
+      {% for digest in digests %}
+        <article class="card">
+          <p class="muted">{{ digest.release_date }}</p>
+          <h2>{{ digest.release_id }}</h2>
+          <p>{{ digest.summary }}</p>
+          <p>{{ digest.content.metrics.items_count if digest.content.metrics else 0 }} пунктов</p>
+          <a href="/digest/{{ digest.release_id }}">Открыть дайджест</a>
+        </article>
+      {% else %}
+        <p>Пока нет опубликованных дайджестов.</p>
+      {% endfor %}
+    </div>
+  </main>
+</body>
+</html>

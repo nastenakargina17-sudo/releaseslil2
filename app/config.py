@@ -8,6 +8,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
 TEMPLATES_DIR = BASE_DIR / "templates"
 UPLOADS_DIR = BASE_DIR / "uploads"
+STATIC_DIR = BASE_DIR / "static"
 DB_PATH = DATA_DIR / "release_digest.db"
 ENV_PATH = BASE_DIR / ".env"
 
@@ -15,6 +16,7 @@ ENV_PATH = BASE_DIR / ".env"
 def ensure_directories() -> None:
     DATA_DIR.mkdir(exist_ok=True)
     UPLOADS_DIR.mkdir(exist_ok=True)
+    STATIC_DIR.mkdir(exist_ok=True)
 
 
 @dataclass(frozen=True)
