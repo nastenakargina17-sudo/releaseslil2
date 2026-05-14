@@ -23,7 +23,7 @@
     body { font-family: "Onest", Arial, sans-serif; margin: 0; background: var(--dark); color: var(--white); line-height: 1.55; }
     body::before { content: ""; position: fixed; inset: 0; pointer-events: none; background: linear-gradient(135deg, rgba(73,222,78,.18), transparent 30%), radial-gradient(circle at 80% 0%, rgba(255,255,255,.08), transparent 28%); }
     .page { position: relative; max-width: 1180px; margin: 0 auto; padding: 28px 20px 72px; }
-    .brand-row { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 34px; }
+    .brand-row { position: relative; z-index: 2; display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 34px; }
     .brand-logo-panel { display: inline-flex; align-items: center; justify-content: center; min-height: 48px; padding: 11px 14px; border-radius: 8px; background: var(--white); }
     .brand-logo { display: block; width: 132px; max-width: 42vw; }
     .product-badge { display: inline-flex; align-items: center; padding: 8px 18px; border-radius: 8px; transform: skewX(-14deg); background: var(--accent); color: var(--ink); font-weight: 700; box-shadow: 0 14px 34px rgba(73,222,78,.24); }
