@@ -16,23 +16,26 @@ def build_live_digest_content(items: Iterable[DigestItem]) -> dict:
         item for item in items
         if item.status == ItemStatus.APPROVED and item.type != ItemType.RELEASE_CANDIDATE
     ]
+    new_feature_items = [item for item in approved_items if item.type == ItemType.NEW_FEATURE]
+    change_items = [item for item in approved_items if item.type == ItemType.CHANGE]
+    support_items = [item for item in approved_items if item.type in {ItemType.BUGFIX, ItemType.TECHNICAL_IMPROVEMENT}]
     sections = [
         _section(
             "new_features",
             "Что нового",
-            [item for item in approved_items if item.type == ItemType.NEW_FEATURE],
+            new_feature_items,
             include_tracker=False,
         ),
         _section(
             "changes",
             "Что стало удобнее",
-            [item for item in approved_items if item.type == ItemType.CHANGE],
+            change_items,
             include_tracker=False,
         ),
         _section(
             "support",
-            "Исправления и технические улучшения",
-            [item for item in approved_items if item.type in {ItemType.BUGFIX, ItemType.TECHNICAL_IMPROVEMENT}],
+            "Стабильность и техническая база",
+            support_items,
             include_tracker=True,
             collapsed=True,
         ),
@@ -41,12 +44,11 @@ def build_live_digest_content(items: Iterable[DigestItem]) -> dict:
     return {
         "sections": visible_sections,
         "metrics": {
-            "items_count": sum(len(section["items"]) for section in visible_sections),
-            "product_items_count": sum(
-                len(section["items"])
-                for section in visible_sections
-                if section["id"] in {"new_features", "changes"}
-            ),
+            "items_count": len(approved_items),
+            "new_features_count": len(new_feature_items),
+            "changes_count": len(change_items),
+            "technical_count": len(support_items),
+            "product_items_count": len(new_feature_items) + len(change_items),
         },
     }
 
@@ -77,6 +79,7 @@ def _section(section_id: str, title: str, items: list[DigestItem], include_track
         "id": section_id,
         "title": title,
         "collapsed": collapsed,
+        "items_count": len(items),
         "items": [_item_payload(item, include_tracker) for item in items],
     }
 
@@ -86,6 +89,7 @@ def _item_payload(item: DigestItem, include_tracker: bool) -> dict:
         "title": item.title,
         "description": item.description,
         "module": item.module,
+        "module_icon": _module_icon_key(item.module),
         "type": item.type.value,
         "value_category": item.category.value if item.category else "",
         "value_category_label": CLIENT_CATEGORY_LABELS.get(item.category, "") if item.category else "",
@@ -95,6 +99,22 @@ def _item_payload(item: DigestItem, include_tracker: bool) -> dict:
     if include_tracker:
         payload["tracker_urls"] = list(item.tracker_urls)
     return payload
+
+
+def _module_icon_key(module: str) -> str:
+    normalized = module.casefold()
+    icon_keywords = (
+        ("integrations", ("интеграц", "api", "маркетплейс", "marketplace")),
+        ("hiring", ("подбор", "кандидат", "воронк")),
+        ("analytics", ("аналит", "отчет", "дашборд", "метрик")),
+        ("settings", ("настрой", "админ", "конфиг")),
+        ("communications", ("коммуникац", "уведом", "telegram", "почт")),
+        ("platform", ("ядро", "платформ", "core")),
+    )
+    for icon_key, keywords in icon_keywords:
+        if any(keyword in normalized for keyword in keywords):
+            return icon_key
+    return "module"
 
 
 def _media_payload(path: str) -> dict:

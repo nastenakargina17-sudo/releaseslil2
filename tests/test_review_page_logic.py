@@ -333,6 +333,53 @@ class DigestGuardTests(unittest.TestCase):
                 uploads_dir=self.config.UPLOADS_DIR,
             )
 
+    def test_live_digest_metrics_count_release_categories(self) -> None:
+        from app.services.publication import build_live_digest_content
+
+        items = [
+            DigestItem(id="feature", release_id="2026-04", source_item_ids=[], title="Feature", description="Feature text", module="Подбор", type=ItemType.NEW_FEATURE, category=None, status=ItemStatus.APPROVED),
+            DigestItem(id="change", release_id="2026-04", source_item_ids=[], title="Change", description="Change text", module="Интеграции", type=ItemType.CHANGE, category=None, status=ItemStatus.APPROVED),
+            DigestItem(id="tech", release_id="2026-04", source_item_ids=[], title="Tech", description="", module="Платформа", type=ItemType.TECHNICAL_IMPROVEMENT, category=None, status=ItemStatus.APPROVED),
+            DigestItem(id="bug", release_id="2026-04", source_item_ids=[], title="Bug", description="", module="Ядро", type=ItemType.BUGFIX, category=None, status=ItemStatus.APPROVED),
+            DigestItem(id="draft", release_id="2026-04", source_item_ids=[], title="Draft", description="", module="Ядро", type=ItemType.NEW_FEATURE, category=None, status=ItemStatus.DRAFT),
+        ]
+
+        content = build_live_digest_content(items)
+
+        self.assertEqual(
+            content["metrics"],
+            {
+                "items_count": 4,
+                "new_features_count": 1,
+                "changes_count": 1,
+                "technical_count": 2,
+                "product_items_count": 2,
+            },
+        )
+        support = next(section for section in content["sections"] if section["id"] == "support")
+        self.assertEqual(support["title"], "Стабильность и техническая база")
+        self.assertEqual(support["items_count"], 2)
+
+    def test_item_payload_includes_module_icon_key(self) -> None:
+        from app.services.publication import build_live_digest_content
+
+        item = DigestItem(
+            id="integration",
+            release_id="2026-04",
+            source_item_ids=[],
+            title="Integration",
+            description="Integration text",
+            module="Интеграции",
+            type=ItemType.NEW_FEATURE,
+            category=None,
+            status=ItemStatus.APPROVED,
+        )
+
+        content = build_live_digest_content([item])
+        first_item = content["sections"][0]["items"][0]
+
+        self.assertEqual(first_item["module_icon"], "integrations")
+
     def test_prepare_preview_requires_ready_release(self) -> None:
         response = self.client.post("/review/2026-04/prepare-digest-preview", follow_redirects=False)
 
@@ -735,7 +782,7 @@ class DigestGuardTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("Что нового", response.text)
         self.assertIn("Что стало удобнее", response.text)
-        self.assertIn("Исправления и технические улучшения", response.text)
+        self.assertIn("Стабильность и техническая база", response.text)
         self.assertIn("Approved feature", response.text)
         self.assertIn("Approved change", response.text)
         self.assertIn("Approved fix", response.text)
@@ -824,7 +871,7 @@ class DigestGuardTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn("<details", response.text)
-        self.assertIn("Исправления и технические улучшения", response.text)
+        self.assertIn("Стабильность и техническая база", response.text)
         self.assertNotIn("<details open", response.text)
 
     def test_digest_omits_empty_publication_sections(self) -> None:
@@ -855,7 +902,7 @@ class DigestGuardTests(unittest.TestCase):
         self.assertNotIn("Нет изменений", response.text)
         self.assertNotIn('id="new-features-heading"', response.text)
         self.assertNotIn('id="changes-heading"', response.text)
-        self.assertIn("Исправления и технические улучшения", response.text)
+        self.assertIn("Стабильность и техническая база", response.text)
 
     def test_item_save_supports_ajax_without_redirect(self) -> None:
         item = self.storage.get_item("item-1")
