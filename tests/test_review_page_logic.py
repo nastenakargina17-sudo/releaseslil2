@@ -190,6 +190,21 @@ class DigestGuardTests(unittest.TestCase):
         )
         client.cookies.set(SESSION_COOKIE_NAME, response.headers["set-cookie"].split(";", 1)[0].split("=", 1)[1])
 
+    def _set_release_preview_ready(self) -> None:
+        release = self.storage.get_release("2026-04")
+        self.storage.update_release_summary(
+            "2026-04",
+            release.summary,
+            SummaryStatus.APPROVED.value,
+            expected_version=release.version,
+        )
+        self.storage.update_release_publication_status(
+            "2026-04",
+            PublicationStatus.PREVIEW,
+            note="Preview сформирован.",
+            preview_prepared_by="Employee",
+        )
+
     def tearDown(self) -> None:
         self.client.close()
         self.temp_dir.cleanup()
@@ -198,7 +213,8 @@ class DigestGuardTests(unittest.TestCase):
         response = self.client.get("/review/2026-04")
 
         self.assertEqual(response.status_code, 200)
-        self.assertIn("Подтвердить дайджест", response.text)
+        self.assertIn("Дайджест в подготовке", response.text)
+        self.assertIn("Сформировать preview", response.text)
         self.assertIn("Сохранить изменения", response.text)
         self.assertIn("Исключить из релиза", response.text)
         self.assertIn("Категория ценности", response.text)
@@ -633,8 +649,9 @@ class DigestGuardTests(unittest.TestCase):
     def test_digest_route_rejects_non_final_items(self) -> None:
         response = self.client.get("/digest/2026-04")
 
-        self.assertEqual(response.status_code, 400)
-        self.assertIn("Не все задачи находятся в статусе подтверждения", response.text)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Дайджест в подготовке", response.text)
+        self.assertNotIn("Feature title", response.text)
 
     def test_release_candidate_does_not_block_digest_when_main_items_are_final(self) -> None:
         self.storage.update_item(
@@ -645,8 +662,9 @@ class DigestGuardTests(unittest.TestCase):
             status=ItemStatus.APPROVED.value,
             is_paid_feature=False,
         )
+        self._set_release_preview_ready()
 
-        response = self.client.get("/digest/2026-04")
+        response = self.client.get("/review/2026-04/digest-preview")
 
         self.assertEqual(response.status_code, 200)
         self.assertIn("Feature title", response.text)
@@ -710,8 +728,9 @@ class DigestGuardTests(unittest.TestCase):
                 ),
             ],
         )
+        self._set_release_preview_ready()
 
-        response = self.client.get("/digest/2026-04")
+        response = self.client.get("/review/2026-04/digest-preview")
 
         self.assertEqual(response.status_code, 200)
         self.assertIn("Что нового", response.text)
@@ -754,8 +773,9 @@ class DigestGuardTests(unittest.TestCase):
                 ),
             ],
         )
+        self._set_release_preview_ready()
 
-        response = self.client.get("/digest/2026-04")
+        response = self.client.get("/review/2026-04/digest-preview")
 
         self.assertEqual(response.status_code, 200)
         self.assertIn("New analytics", response.text)
@@ -771,8 +791,9 @@ class DigestGuardTests(unittest.TestCase):
             status=ItemStatus.APPROVED.value,
             is_paid_feature=True,
         )
+        self._set_release_preview_ready()
 
-        response = self.client.get("/digest/2026-04")
+        response = self.client.get("/review/2026-04/digest-preview")
 
         self.assertEqual(response.status_code, 200)
         self.assertIn("Экономия времени", response.text)
@@ -797,8 +818,9 @@ class DigestGuardTests(unittest.TestCase):
                 ),
             ],
         )
+        self._set_release_preview_ready()
 
-        response = self.client.get("/digest/2026-04")
+        response = self.client.get("/review/2026-04/digest-preview")
 
         self.assertEqual(response.status_code, 200)
         self.assertIn("<details", response.text)
@@ -824,8 +846,9 @@ class DigestGuardTests(unittest.TestCase):
                 ),
             ],
         )
+        self._set_release_preview_ready()
 
-        response = self.client.get("/digest/2026-04")
+        response = self.client.get("/review/2026-04/digest-preview")
 
         self.assertEqual(response.status_code, 200)
         self.assertNotIn("Нет новых фич", response.text)
