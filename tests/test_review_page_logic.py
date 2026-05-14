@@ -651,6 +651,66 @@ class DigestGuardTests(unittest.TestCase):
         self.assertIn("Оглавление", response.text)
         self.assertIn("#49DE4E", response.text)
 
+    def test_public_digest_normalizes_legacy_snapshot_metrics_and_support_title(self) -> None:
+        from app.models import PublishedDigest
+
+        self.storage.save_published_digest(
+            PublishedDigest(
+                release_id="2026-04",
+                release_date="2026-04-30",
+                summary="Published summary",
+                content={
+                    "sections": [
+                        {
+                            "id": "new_features",
+                            "title": "Что нового",
+                            "collapsed": False,
+                            "items": [
+                                {
+                                    "title": "Legacy feature",
+                                    "description": "Snapshot text",
+                                    "module": "Интеграции",
+                                    "value_category_label": "",
+                                    "is_paid_feature": False,
+                                    "media": [],
+                                }
+                            ],
+                        },
+                        {
+                            "id": "support",
+                            "title": "Исправления и технические улучшения",
+                            "collapsed": True,
+                            "items": [
+                                {
+                                    "title": "Legacy fix",
+                                    "description": "",
+                                    "module": "Ядро",
+                                    "value_category_label": "",
+                                    "is_paid_feature": False,
+                                    "media": [],
+                                    "tracker_urls": ["https://tracker.yandex.ru/DEV-1"],
+                                }
+                            ],
+                        },
+                    ],
+                    "metrics": {"items_count": 2, "product_items_count": 1},
+                },
+                published_by="Employee",
+                published_at="1710000000",
+            )
+        )
+
+        response = self.client.get("/digest/2026-04")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Новые функции", response.text)
+        self.assertIn("<strong>1</strong><span>Новые функции</span>", response.text)
+        self.assertIn("<strong>0</strong><span>Улучшения</span>", response.text)
+        self.assertIn("<strong>1</strong><span>Техническая база</span>", response.text)
+        self.assertIn("Стабильность и техническая база", response.text)
+        self.assertNotIn("Исправления и технические улучшения", response.text)
+        self.assertIn('class="module-icon module-icon-integrations"', response.text)
+
     def test_digest_uses_deep_brand_report_markup(self) -> None:
         self.storage.update_release_publication_status("2026-04", PublicationStatus.PREVIEW)
         item = DigestItem(

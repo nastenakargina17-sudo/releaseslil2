@@ -74,6 +74,27 @@ def build_published_digest_snapshot(
     )
 
 
+def normalize_published_digest_content(content: dict) -> dict:
+    sections = [
+        _normalize_published_section(section)
+        for section in content.get("sections", [])
+    ]
+    metrics = dict(content.get("metrics", {}))
+    section_counts = {
+        section["id"]: len(section["items"])
+        for section in sections
+    }
+    metrics.setdefault("items_count", sum(section_counts.values()))
+    metrics.setdefault("new_features_count", section_counts.get("new_features", 0))
+    metrics.setdefault("changes_count", section_counts.get("changes", 0))
+    metrics.setdefault("technical_count", section_counts.get("support", 0))
+    metrics.setdefault(
+        "product_items_count",
+        section_counts.get("new_features", 0) + section_counts.get("changes", 0),
+    )
+    return {"sections": sections, "metrics": metrics}
+
+
 def _section(section_id: str, title: str, items: list[DigestItem], include_tracker: bool, collapsed: bool = False) -> dict:
     return {
         "id": section_id,
@@ -82,6 +103,28 @@ def _section(section_id: str, title: str, items: list[DigestItem], include_track
         "items_count": len(items),
         "items": [_item_payload(item, include_tracker) for item in items],
     }
+
+
+def _normalize_published_section(section: dict) -> dict:
+    normalized_section = dict(section)
+    section_id = normalized_section.get("id", "")
+    items = [
+        _normalize_published_item(item)
+        for item in normalized_section.get("items", [])
+    ]
+    normalized_section["items"] = items
+    normalized_section.setdefault("items_count", len(items))
+    if section_id == "support":
+        normalized_section["title"] = "Стабильность и техническая база"
+        normalized_section["collapsed"] = True
+    return normalized_section
+
+
+def _normalize_published_item(item: dict) -> dict:
+    normalized_item = dict(item)
+    normalized_item.setdefault("module_icon", _module_icon_key(str(normalized_item.get("module", ""))))
+    normalized_item.setdefault("media", [])
+    return normalized_item
 
 
 def _item_payload(item: DigestItem, include_tracker: bool) -> dict:

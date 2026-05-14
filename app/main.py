@@ -55,7 +55,12 @@ from app.review_utils import (
 from app.services.ingest import build_release
 from app.services.importers import import_release_from_apis
 from app.services.mock_data import sample_source_items
-from app.services.publication import PublicationError, build_live_digest_content, build_published_digest_snapshot
+from app.services.publication import (
+    PublicationError,
+    build_live_digest_content,
+    build_published_digest_snapshot,
+    normalize_published_digest_content,
+)
 from app.services.telegram_bot import TelegramBotService
 from app.session import clear_session, load_session, save_session
 from app.storage import (
@@ -786,6 +791,7 @@ def final_digest(request: Request, release_id: str) -> HTMLResponse:
             },
         )
 
+    content = normalize_published_digest_content(snapshot.content)
     return templates.TemplateResponse(
         request,
         "digest.html",
@@ -793,8 +799,8 @@ def final_digest(request: Request, release_id: str) -> HTMLResponse:
             "release": release,
             "snapshot": snapshot,
             "page_mode": "public",
-            "sections": snapshot.content.get("sections", []),
-            "metrics": snapshot.content.get("metrics", {}),
+            "sections": content["sections"],
+            "metrics": content["metrics"],
             "review_user": review_user,
         },
     )
