@@ -55,14 +55,14 @@
     .section { margin-top: 42px; }
     .section h2 { font-size: 32px; margin: 0 0 18px; letter-spacing: 0; }
     .grid { display: grid; gap: 18px; }
-    .card { position: relative; overflow: hidden; background: var(--white); border: 1px solid var(--line); border-radius: 8px; padding: 24px; color: var(--ink); box-shadow: 0 14px 40px rgba(0,0,0,.14); }
-    .card::after { content: ""; position: absolute; right: -44px; top: -52px; width: 160px; height: 116px; background: var(--accent-soft); transform: skewX(-18deg); border-radius: 8px; }
+    .card { position: relative; overflow: hidden; background: linear-gradient(145deg, #202632, #111620 72%); border: 1px solid rgba(255,255,255,.14); border-radius: 8px; padding: 24px; color: var(--white); box-shadow: 0 18px 48px rgba(0,0,0,.28); }
+    .card::after { content: ""; position: absolute; right: -44px; top: -52px; width: 160px; height: 116px; background: rgba(73,222,78,.22); transform: skewX(-18deg); border-radius: 8px; }
     .card > * { position: relative; z-index: 1; }
-    .card p { margin: 0 0 12px; color: var(--ink-soft); }
+    .card p { margin: 0 0 12px; color: rgba(255,255,255,.76); }
     .card h3 { margin: 14px 0 12px; font-size: 24px; line-height: 1.18; }
     .card-meta { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
     .module-chip, .value-badge, .premium-badge { display: inline-flex; align-items: center; gap: 7px; border-radius: 999px; padding: 6px 11px; font-weight: 700; font-size: 13px; }
-    .module-chip { background: #EEF2F6; color: var(--ink); }
+    .module-chip { background: rgba(255,255,255,.11); color: var(--white); border: 1px solid rgba(255,255,255,.12); }
     .module-icon { width: 16px; height: 16px; border-radius: 5px; background: var(--accent); position: relative; flex: 0 0 16px; }
     .module-icon::after { content: ""; position: absolute; inset: 4px; border: 2px solid var(--ink); border-top: 0; border-left: 0; transform: rotate(45deg); }
     .module-icon-integrations::after { inset: 3px; border: 2px solid var(--ink); border-radius: 50%; transform: none; }
@@ -71,11 +71,11 @@
     .module-icon-settings::after { inset: 4px; border: 2px solid var(--ink); border-radius: 50%; transform: none; }
     .module-icon-communications::after { inset: 4px; border: 2px solid var(--ink); border-top: 0; border-right: 0; transform: rotate(-45deg); }
     .module-icon-platform::after { inset: 4px; border: 2px solid var(--ink); transform: none; }
-    .value-badge { background: var(--accent-soft); color: #11651D; }
-    .premium-badge { background: var(--ink); color: var(--white); }
+    .value-badge { background: rgba(217,255,219,.95); color: #11651D; }
+    .premium-badge { background: #F6C945; color: var(--ink); box-shadow: 0 10px 24px rgba(246,201,69,.18); }
     .card-description { font-size: 16px; }
     .tracker-link { margin-top: 14px; }
-    .tracker-link a { color: #0F7E21; font-weight: 700; }
+    .tracker-link a { color: var(--accent); font-weight: 700; }
     .support-panel { padding: 0; background: rgba(255,255,255,.06); border: 1px solid var(--dark-line); border-radius: 8px; overflow: hidden; }
     .support-panel summary { cursor: pointer; padding: 22px 24px; color: var(--white); font-size: 24px; font-weight: 700; list-style: none; }
     .support-panel summary::-webkit-details-marker { display: none; }

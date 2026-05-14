@@ -32,9 +32,10 @@
     .hero::after { content: ""; position: absolute; right: 8%; bottom: -42px; width: 220px; height: 150px; background: var(--accent); border-radius: 8px; transform: skewX(-18deg); }
     h1 { position: relative; z-index: 1; margin: 0; font-size: 48px; line-height: 1.05; letter-spacing: 0; }
     .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px; }
-    .card { background: var(--white); border: 1px solid var(--line); border-radius: 8px; padding: 22px; position: relative; overflow: hidden; color: var(--ink); box-shadow: 0 14px 40px rgba(0,0,0,.14); }
-    .card::after { content: ""; position: absolute; right: -40px; top: -30px; width: 140px; height: 90px; background: var(--accent-soft); transform: skewX(-18deg); border-radius: 8px; }
+    .card { background: linear-gradient(145deg, #202632, #111620 72%); border: 1px solid rgba(255,255,255,.14); border-radius: 8px; padding: 22px; position: relative; overflow: hidden; color: var(--white); box-shadow: 0 18px 48px rgba(0,0,0,.28); }
+    .card::after { content: ""; position: absolute; right: -40px; top: -30px; width: 140px; height: 90px; background: rgba(73,222,78,.22); transform: skewX(-18deg); border-radius: 8px; }
     .card > * { position: relative; z-index: 1; }
+    .card p { color: rgba(255,255,255,.76); }
     .muted { color: var(--muted); font-weight: 700; }
     a { color: var(--ink); font-weight: 700; }
     .open-link { display: inline-flex; align-items: center; margin-top: 8px; padding: 9px 12px; border-radius: 8px; background: var(--accent); color: var(--ink); text-decoration: none; }
