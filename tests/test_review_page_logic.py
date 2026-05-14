@@ -547,6 +547,89 @@ class DigestGuardTests(unittest.TestCase):
         self.assertIn("Открыть опубликованный дайджест", response.text)
         self.assertNotIn("Сформировать preview", response.text)
 
+    def test_public_digest_uses_brand_assets_and_toc(self) -> None:
+        from app.models import PublishedDigest
+
+        self.storage.save_published_digest(
+            PublishedDigest(
+                release_id="2026-04",
+                release_date="2026-04-30",
+                summary="Published summary",
+                content={
+                    "sections": [
+                        {
+                            "id": "new_features",
+                            "title": "Что нового",
+                            "collapsed": False,
+                            "items": [
+                                {
+                                    "title": "Snapshot feature",
+                                    "description": "Snapshot text",
+                                    "module": "Core",
+                                    "value_category_label": "Экономия времени",
+                                    "is_paid_feature": True,
+                                    "media": [],
+                                }
+                            ],
+                        }
+                    ],
+                    "metrics": {"items_count": 1, "product_items_count": 1},
+                },
+                published_by="Employee",
+                published_at="1710000000",
+            )
+        )
+
+        response = self.client.get("/digest/2026-04")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("/static/brand/Logo_Skillaz_RGB.svg", response.text)
+        self.assertIn("Подбор", response.text)
+        self.assertIn("Оглавление", response.text)
+        self.assertIn("#49DE4E", response.text)
+
+    def test_multiple_media_render_as_carousel(self) -> None:
+        from app.models import PublishedDigest
+
+        self.storage.save_published_digest(
+            PublishedDigest(
+                release_id="2026-04",
+                release_date="2026-04-30",
+                summary="Published summary",
+                content={
+                    "sections": [
+                        {
+                            "id": "new_features",
+                            "title": "Что нового",
+                            "collapsed": False,
+                            "items": [
+                                {
+                                    "title": "Media feature",
+                                    "description": "Snapshot text",
+                                    "module": "Core",
+                                    "value_category_label": "",
+                                    "is_paid_feature": False,
+                                    "media": [
+                                        {"path": "/uploads/published/2026-04/a.png", "kind": "image"},
+                                        {"path": "/uploads/published/2026-04/b.png", "kind": "image"},
+                                    ],
+                                }
+                            ],
+                        }
+                    ],
+                    "metrics": {"items_count": 1, "product_items_count": 1},
+                },
+                published_by="Employee",
+                published_at="1710000000",
+            )
+        )
+
+        response = self.client.get("/digest/2026-04")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('class="media-carousel"', response.text)
+        self.assertIn("data-carousel", response.text)
+
     def test_digest_route_rejects_non_final_items(self) -> None:
         response = self.client.get("/digest/2026-04")
 

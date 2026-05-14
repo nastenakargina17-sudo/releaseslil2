@@ -14,14 +14,34 @@
     <p><a href="{{ item.tracker_urls[0] }}">Задача в трекере</a></p>
   {% endif %}
   {% if item.media %}
-    <div class="media-strip">
-      {% for media in item.media %}
+    {% if item.media|length > 1 %}
+      <div class="media-carousel" data-carousel>
+        <div class="media-track">
+          {% for media in item.media %}
+            <div class="media-slide">
+              {% if media.kind == "video" %}
+                <video src="{{ media.path }}" controls preload="metadata"></video>
+              {% else %}
+                <img src="{{ media.path }}" alt="Иллюстрация к пункту {{ item.title }}">
+              {% endif %}
+            </div>
+          {% endfor %}
+        </div>
+        <div class="media-controls" aria-label="Навигация по медиа">
+          {% for media in item.media %}
+            <span class="media-dot"></span>
+          {% endfor %}
+        </div>
+      </div>
+    {% else %}
+      <div class="media-single">
+        {% set media = item.media[0] %}
         {% if media.kind == "video" %}
-          <video src="{{ media.path }}" controls preload="metadata" style="max-width: 100%;"></video>
+          <video src="{{ media.path }}" controls preload="metadata"></video>
         {% else %}
-          <img src="{{ media.path }}" alt="Иллюстрация к пункту {{ item.title }}" style="max-width: 100%;">
+          <img src="{{ media.path }}" alt="Иллюстрация к пункту {{ item.title }}">
         {% endif %}
-      {% endfor %}
-    </div>
+      </div>
+    {% endif %}
   {% endif %}
 </article>

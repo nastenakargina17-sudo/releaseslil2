@@ -25,6 +25,7 @@ from app.auth import (
 )
 
 from app.config import (
+    STATIC_DIR,
     TEMPLATES_DIR,
     UPLOADS_DIR,
     ensure_directories,
@@ -88,6 +89,7 @@ auth_settings = get_auth_settings()
 ensure_directories()
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 app.mount("/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 app.state.processed_telegram_update_ids = set()
 app.state.processed_telegram_update_order = deque()
 app.state.processed_telegram_update_limit = 1000
