@@ -1304,6 +1304,13 @@ class DigestGuardTests(unittest.TestCase):
         self.assertIn("clipboardData.items", response.text)
         self.assertIn("uploadMediaFile(row, clipboardFile,", response.text)
 
+    def test_review_translates_missing_item_errors_and_deduplicates_toasts(self) -> None:
+        response = self.client.get("/review/2026-04")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Карточка уже обновилась на сервере. Обновите страницу и попробуйте снова.", response.text)
+        self.assertIn("lastToast.key === toastKey", response.text)
+
     def test_uploaded_media_can_be_deleted(self) -> None:
         initial_version = self.storage.get_item("item-1").version
         upload_response = self.client.post(

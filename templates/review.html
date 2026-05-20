@@ -1397,6 +1397,7 @@
         gif: {{ media_limits.gif_mb }} * 1024 * 1024,
         video: {{ media_limits.video_mb }} * 1024 * 1024,
       };
+      let lastToast = { key: "", shownAt: 0 };
 
       const getCardStatus = (card) => card?.dataset.itemStatus || "";
 
@@ -1404,6 +1405,12 @@
         if (!toastStack) {
           return;
         }
+        const toastKey = `${type}:${message}`;
+        const now = Date.now();
+        if (lastToast.key === toastKey && now - lastToast.shownAt < 1200) {
+          return;
+        }
+        lastToast = { key: toastKey, shownAt: now };
         const toast = document.createElement("div");
         toast.className = `toast${type === "error" ? " is-error" : ""}`;
         toast.textContent = message;
@@ -1687,7 +1694,11 @@
         }
 
         if (!response.ok) {
-          const error = new Error(payload.detail || payload.message || "Не удалось выполнить действие.");
+          const missingItem = response.status === 404 && payload.detail === "Digest item not found";
+          const message = missingItem
+            ? "Карточка уже обновилась на сервере. Обновите страницу и попробуйте снова."
+            : payload.detail || payload.message || "Не удалось выполнить действие.";
+          const error = new Error(message);
           error.status = response.status;
           error.payload = payload;
           throw error;
