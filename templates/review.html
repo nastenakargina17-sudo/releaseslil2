@@ -635,6 +635,38 @@
       min-width: 180px;
     }
 
+    .paste-target {
+      flex: 1 1 260px;
+      min-height: 74px;
+      display: grid;
+      align-content: center;
+      gap: 4px;
+      padding: 12px 14px;
+      border: 1px dashed rgba(21, 51, 92, 0.34);
+      border-radius: var(--radius-md);
+      background: rgba(21, 51, 92, 0.05);
+      color: var(--text-soft);
+      cursor: text;
+      transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+    }
+
+    .paste-target:focus,
+    .paste-target.is-pasting {
+      outline: none;
+      border-color: rgba(255, 200, 4, 0.9);
+      background: rgba(255, 200, 4, 0.12);
+      box-shadow: 0 0 0 4px rgba(255, 200, 4, 0.18);
+    }
+
+    .paste-target strong {
+      color: var(--navy-bright);
+    }
+
+    .paste-target span {
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
     .upload-hint {
       margin-top: 6px;
       padding: 10px 12px;
@@ -1168,6 +1200,16 @@
                       accept=".jpg,.jpeg,.png,.webp,.gif,.mp4,.webm,image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm"
                       data-media-input
                     >
+                  </div>
+                  <div
+                    class="paste-target"
+                    data-paste-target
+                    tabindex="0"
+                    role="button"
+                    aria-label="Вставить скрин из буфера"
+                  >
+                    <strong>Вставить скрин из буфера</strong>
+                    <span>Кликните сюда и нажмите ⌘V или Ctrl+V.</span>
                   </div>
                   <div style="align-self: end;">
                     <button type="button" class="button button-subtle" data-upload-button>Загрузить файл</button>
@@ -1837,6 +1879,66 @@
         return file;
       };
 
+      const clipboardImageFile = (event) => {
+        const clipboardData = event.clipboardData;
+        const items = Array.from(clipboardData ? clipboardData.items || [] : []);
+        const imageItem = items.find((item) => item.kind === "file" && item.type.startsWith("image/"));
+        if (imageItem) {
+          return imageItem.getAsFile();
+        }
+        const files = Array.from(clipboardData ? clipboardData.files || [] : []);
+        return files.find((file) => (file.type || "").toLowerCase().startsWith("image/")) || null;
+      };
+
+      const uploadMediaFile = async (row, file, options = {}) => {
+        const fileInput = row.querySelector("[data-media-input]");
+        const submitButton = row.querySelector("[data-upload-button]");
+        const pasteTarget = row.querySelector("[data-paste-target]");
+        const card = row.closest("[data-item-card]");
+        const uploadUrl = row.dataset.uploadUrl;
+        if (!file || !card || !uploadUrl) {
+          showToast(options.emptyMessage || "Сначала выберите файл для загрузки.", "error");
+          return;
+        }
+
+        if (submitButton) {
+          submitButton.disabled = true;
+        }
+        if (pasteTarget) {
+          pasteTarget.classList.add("is-pasting");
+        }
+
+        try {
+          const preparedFile = await prepareUploadFile(file);
+          const formData = new FormData();
+          const fileName = preparedFile.name || `clipboard-${Date.now()}.png`;
+          formData.set("image", preparedFile, fileName);
+          const payload = await fetchJson(uploadUrl, {
+            method: "POST",
+            body: formData,
+          });
+          renderMediaGallery(card, payload.media_paths || []);
+          const versionInput = card.querySelector("[data-object-version]");
+          if (versionInput && payload.version) {
+            versionInput.value = payload.version;
+            versionInput.defaultValue = payload.version;
+          }
+          if (fileInput) {
+            fileInput.value = "";
+          }
+          showToast(payload.message || (options.source === "paste" ? "Скрин вставлен." : "Файл загружен."));
+        } catch (error) {
+          showToast(error.message, "error");
+        } finally {
+          if (submitButton) {
+            submitButton.disabled = false;
+          }
+          if (pasteTarget) {
+            pasteTarget.classList.remove("is-pasting");
+          }
+        }
+      };
+
       reviewForms.forEach((form) => {
         setFormDefaults(form);
 
@@ -1928,41 +2030,22 @@
         const uploadButton = row.querySelector("[data-upload-button]");
         uploadButton?.addEventListener("click", async () => {
           const fileInput = row.querySelector("[data-media-input]");
-          const submitButton = row.querySelector("[data-upload-button]");
-          const card = row.closest("[data-item-card]");
-          const uploadUrl = row.dataset.uploadUrl;
-          if (!fileInput || !fileInput.files?.length || !card || !uploadUrl) {
-            showToast("Сначала выберите файл для загрузки.", "error");
+          await uploadMediaFile(row, fileInput?.files?.[0] || null);
+        });
+
+        const pasteTarget = row.querySelector("[data-paste-target]");
+        pasteTarget?.addEventListener("paste", async (event) => {
+          const clipboardFile = clipboardImageFile(event);
+          if (!clipboardFile) {
+            showToast("В буфере не найдено изображение.", "error");
             return;
           }
+          event.preventDefault();
+          await uploadMediaFile(row, clipboardFile, { source: "paste" });
+        });
 
-          if (submitButton) {
-            submitButton.disabled = true;
-          }
-
-          try {
-            const preparedFile = await prepareUploadFile(fileInput.files[0]);
-            const formData = new FormData();
-            formData.set("image", preparedFile, preparedFile.name);
-            const payload = await fetchJson(uploadUrl, {
-              method: "POST",
-              body: formData,
-            });
-            renderMediaGallery(card, payload.media_paths || []);
-            const versionInput = card.querySelector("[data-object-version]");
-            if (versionInput && payload.version) {
-              versionInput.value = payload.version;
-              versionInput.defaultValue = payload.version;
-            }
-            fileInput.value = "";
-            showToast(payload.message || "Файл загружен.");
-          } catch (error) {
-            showToast(error.message, "error");
-          } finally {
-            if (submitButton) {
-              submitButton.disabled = false;
-            }
-          }
+        pasteTarget?.addEventListener("click", () => {
+          pasteTarget.focus();
         });
       });
 

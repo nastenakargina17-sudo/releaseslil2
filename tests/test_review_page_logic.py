@@ -1295,6 +1295,15 @@ class DigestGuardTests(unittest.TestCase):
         self.assertNotIn("convertImageToWebp", response.text)
         self.assertIn("return file;", response.text)
 
+    def test_review_supports_pasting_images_from_clipboard(self) -> None:
+        response = self.client.get("/review/2026-04")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("data-paste-target", response.text)
+        self.assertIn("Вставить скрин из буфера", response.text)
+        self.assertIn("clipboardData.items", response.text)
+        self.assertIn("uploadMediaFile(row, clipboardFile,", response.text)
+
     def test_uploaded_media_can_be_deleted(self) -> None:
         initial_version = self.storage.get_item("item-1").version
         upload_response = self.client.post(

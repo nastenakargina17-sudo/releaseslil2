@@ -25,7 +25,8 @@ class TelegramBotService:
         text = str(message.get("text") or "").strip()
         if not chat_id:
             return
-        if text == "/start":
+        command = _extract_bot_command(text)
+        if command == "/start":
             welcome_message = build_bot_welcome_message()
             reply_markup = build_start_keyboard()
             welcome_image_path = self.notifier.settings.welcome_image_path
@@ -44,7 +45,7 @@ class TelegramBotService:
             )
             return
 
-        if text.lower() in {"показать релизы", "/releases", "релизы"}:
+        if command == "/releases" or text.casefold() in {"показать релизы", "релизы"}:
             self._send_release_list(chat_id)
 
     def handle_callback_query(self, callback_query: dict) -> None:
@@ -90,3 +91,10 @@ class TelegramBotService:
             chat_id=chat_id,
             reply_markup=build_release_list_keyboard(keyboard_entries),
         )
+
+
+def _extract_bot_command(text: str) -> str:
+    first_token = text.split(maxsplit=1)[0].casefold() if text else ""
+    if not first_token.startswith("/"):
+        return ""
+    return first_token.split("@", 1)[0]

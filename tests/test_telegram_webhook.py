@@ -153,6 +153,45 @@ class TelegramWebhookTests(unittest.TestCase):
             },
         )
 
+    def test_commands_with_bot_mention_are_handled(self) -> None:
+        import app.services.telegram_bot
+
+        telegram_bot = importlib.reload(app.services.telegram_bot)
+        service = telegram_bot.TelegramBotService()
+        service.notifier = MagicMock()
+        service.notifier.settings.welcome_image_path = ""
+        service.confluence = MagicMock()
+        service.confluence.list_releases.return_value = [
+            SimpleNamespace(release_id="2026-04", release_date="2026-04-30")
+        ]
+
+        service.handle_message({"chat": {"id": 390144191}, "text": "/start@NotisBot"})
+        service.handle_message({"chat": {"id": 390144191}, "text": "/releases@NotisBot"})
+
+        service.notifier.send_message.assert_any_call(
+            (
+                "Привет. Я Нотис — архивариус релизов.\n\n"
+                "Я собираю изменения, привожу их в порядок и превращаю в понятные "
+                "релиз-дайджесты.\n\n"
+                "Ниже ты найдёшь список доступных релизов."
+            ),
+            chat_id="390144191",
+            reply_markup={
+                "keyboard": [[{"text": "Показать релизы"}]],
+                "resize_keyboard": True,
+                "is_persistent": True,
+            },
+        )
+        service.notifier.send_message.assert_any_call(
+            "Доступные релизы уже собраны. Выбери нужный.",
+            chat_id="390144191",
+            reply_markup={
+                "inline_keyboard": [
+                    [{"text": "2026-04-30", "callback_data": "release:2026-04"}]
+                ]
+            },
+        )
+
     def test_send_photo_serializes_reply_markup_for_multipart_request(self) -> None:
         from app.notifications.telegram import TelegramNotifier
 
