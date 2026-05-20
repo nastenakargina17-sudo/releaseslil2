@@ -222,6 +222,13 @@ class DigestGuardTests(unittest.TestCase):
         self.assertIn("На странице сейчас", response.text)
         self.assertNotIn("Выйти из ревью", response.text)
 
+    def test_prepare_preview_button_remains_clickable_when_review_has_blockers(self) -> None:
+        response = self.client.get("/review/2026-04")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('<button type="submit" class="button button-primary">Сформировать preview</button>', response.text)
+        self.assertIn('card.dataset.itemType === "release_candidate"', response.text)
+
     def test_release_defaults_to_draft_publication_status(self) -> None:
         release = self.storage.get_release("2026-04")
 

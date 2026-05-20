@@ -861,7 +861,7 @@
             <small class="publish-hint">Публикация зафиксирует версию и закроет релиз от редактирования.</small>
           {% else %}
             <form method="post" action="/review/{{ release.id }}/prepare-digest-preview" id="confirm-digest-button" data-release-id="{{ release.id }}">
-              <button type="submit" class="button button-primary" {% if not digest_ready %}disabled{% endif %}>Сформировать preview</button>
+              <button type="submit" class="button button-primary">Сформировать preview</button>
             </form>
             <form method="post" action="/review/{{ release.id }}/notify-review">
               <button type="submit" class="button button-subtle">Отправить статус ревью в Telegram</button>
@@ -2132,6 +2132,9 @@
         confirmDigestButton.addEventListener("click", (event) => {
           clearHighlights();
           const blockedCards = Array.from(document.querySelectorAll("[data-item-card]")).filter((card) => {
+            if (card.dataset.itemType === "{{ ItemType.RELEASE_CANDIDATE.value }}") {
+              return false;
+            }
             const status = getCardStatus(card);
             return status !== "{{ approved_status }}" && status !== "{{ excluded_status }}";
           });
