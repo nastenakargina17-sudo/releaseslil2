@@ -121,6 +121,41 @@ class ReviewAuthTests(unittest.TestCase):
         self.assertIn("На странице сейчас", review_response.text)
         self.assertNotIn("employee@example.com", review_response.text)
 
+    def test_allowlisted_secondary_yandex_email_can_reach_review(self) -> None:
+        login_response = self.client.get(
+            "/auth/yandex/login?next=/review/2026-04",
+            follow_redirects=False,
+        )
+        state = parse_qs(urlparse(login_response.headers["location"]).query)["state"][0]
+
+        with patch.object(
+            self.main,
+            "exchange_code_for_token",
+            new=AsyncMock(return_value="access-token"),
+        ), patch.object(
+            self.main,
+            "fetch_yandex_user",
+            new=AsyncMock(
+                return_value={
+                    "default_email": "personal@example.com",
+                    "emails": ["personal@example.com", "employee@example.com"],
+                    "real_name": "Release Reviewer",
+                }
+            ),
+        ):
+            callback_response = self.client.get(
+                f"/auth/yandex/callback?code=code-123&state={state}",
+                follow_redirects=False,
+            )
+
+        self.assertEqual(callback_response.status_code, 303)
+        self.assertEqual(callback_response.headers["location"], "/review/2026-04")
+
+        review_response = self.client.get("/review/2026-04")
+
+        self.assertEqual(review_response.status_code, 200)
+        self.assertIn("Release Reviewer", review_response.text)
+
     def test_non_allowlisted_email_is_rejected(self) -> None:
         login_response = self.client.get(
             "/auth/yandex/login?next=/review/2026-04",

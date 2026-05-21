@@ -80,16 +80,21 @@ def generate_state_token() -> str:
     return token_urlsafe(24)
 
 
-def extract_user_email(user_info: dict) -> str:
+def extract_user_emails(user_info: dict) -> list[str]:
+    emails: list[str] = []
     default_email = (user_info.get("default_email") or "").strip().lower()
     if default_email:
-        return default_email
-    emails = user_info.get("emails") or []
-    for email in emails:
+        emails.append(default_email)
+    for email in user_info.get("emails") or []:
         normalized = str(email).strip().lower()
-        if normalized:
-            return normalized
-    return ""
+        if normalized and normalized not in emails:
+            emails.append(normalized)
+    return emails
+
+
+def extract_user_email(user_info: dict) -> str:
+    emails = extract_user_emails(user_info)
+    return emails[0] if emails else ""
 
 
 def extract_display_name(user_info: dict, fallback_email: str) -> str:
@@ -102,6 +107,13 @@ def extract_display_name(user_info: dict, fallback_email: str) -> str:
 
 def is_allowed_email(email: str, settings: AuthSettings) -> bool:
     return bool(email) and email.lower() in settings.allowed_review_emails
+
+
+def find_allowed_email(user_info: dict, settings: AuthSettings) -> str:
+    for email in extract_user_emails(user_info):
+        if is_allowed_email(email, settings):
+            return email
+    return ""
 
 
 def _ensure_oauth_settings(settings: AuthSettings) -> None:

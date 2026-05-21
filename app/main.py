@@ -17,8 +17,8 @@ from app.auth import (
     build_yandex_login_url,
     exchange_code_for_token,
     extract_display_name,
-    extract_user_email,
     fetch_yandex_user,
+    find_allowed_email,
     generate_state_token,
     is_allowed_email,
 )
@@ -204,8 +204,8 @@ async def yandex_callback(
     except (AuthConfigurationError, OAuthExchangeError) as exc:
         return RedirectResponse(url=f"/?auth_error={str(exc)}", status_code=303)
 
-    email = extract_user_email(user_info)
-    if not is_allowed_email(email, auth_settings):
+    email = find_allowed_email(user_info, auth_settings)
+    if not email:
         session.pop("user", None)
         response = RedirectResponse(url="/?auth_error=access_denied", status_code=303)
         save_session(response, session, auth_settings)
