@@ -14,7 +14,6 @@ from fastapi.templating import Jinja2Templates
 from app.auth import (
     AuthConfigurationError,
     OAuthExchangeError,
-    build_review_entry_url,
     build_yandex_login_url,
     exchange_code_for_token,
     extract_display_name,
@@ -640,11 +639,7 @@ def notify_review_status(release_id: str) -> RedirectResponse:
     items = list_items(release_id)
     app_settings = get_app_settings()
     review_path = f"/review/{release_id}"
-    review_url = (
-        build_review_entry_url(app_settings.base_url, review_path)
-        if app_settings.base_url
-        else None
-    )
+    review_url = _build_absolute_app_url(app_settings.base_url, review_path)
     notifier = TelegramNotifier(get_telegram_settings())
     notifier.send_message(build_review_status_message(release, items, review_url))
     return RedirectResponse(url=f"/review/{release_id}?flash=review_notified", status_code=303)
@@ -660,7 +655,7 @@ def notify_digest_ready(release_id: str) -> RedirectResponse:
         return RedirectResponse(url=f"/review/{release_id}?flash=digest_not_ready", status_code=303)
     approved_items = [item for item in items if item.status == ItemStatus.APPROVED]
     app_settings = get_app_settings()
-    digest_url = f"{app_settings.base_url}/digest/{release_id}" if app_settings.base_url else None
+    digest_url = _build_absolute_app_url(app_settings.base_url, f"/digest/{release_id}")
     notifier = TelegramNotifier(get_telegram_settings())
     notifier.send_message(build_digest_ready_message(release, approved_items, digest_url))
     return RedirectResponse(url=f"/review/{release_id}?flash=digest_notified", status_code=303)
@@ -836,6 +831,12 @@ def _review_lock_owner(request: Request) -> tuple[str, str]:
     owner_key = email or name or "unknown-reviewer"
     owner_name = name or email or "Ревьюер"
     return owner_key, owner_name
+
+
+def _build_absolute_app_url(base_url: str, path: str) -> str:
+    if not base_url:
+        return path
+    return f"{base_url.rstrip('/')}/{path.lstrip('/')}"
 
 
 def _validate_lock_object(object_type: str, object_id: str, release_id: str) -> None:

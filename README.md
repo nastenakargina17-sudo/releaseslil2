@@ -59,7 +59,7 @@ The currently used production deployment is Railway.
 
 - Project: `releaseslil2`
 - Service: `ReleaseCraft`
-- Production domain: `releaseslil2-production.up.railway.app`
+- Production domain: `skillaz-digest.up.railway.app`
 - Telegram bot webhook is handled by the main web app at `/telegram/webhook`
 
 Important notes:
@@ -70,6 +70,44 @@ Important notes:
 4. For GPT-generated release copy to work in production, the Railway service must have `OPENAI_API_KEY`, `OPENAI_MODEL`, and `OPENAI_TIMEOUT_SECONDS` configured.
 
 The repository also still includes [render.yaml](/Users/user/Downloads/релиз%20ноутс2/render.yaml:1) from an earlier deployment option, but the active environment we verified is Railway.
+
+## Telegram Bot Smoke Test
+
+Use this when the bot stops responding and you need to know whether the problem is code, Railway, or Telegram webhook configuration.
+
+1. Check that Railway serves the app:
+
+   ```bash
+   curl -sS -o /tmp/releasecraft_root.out -w '%{http_code}\n' https://skillaz-digest.up.railway.app/
+   ```
+
+   Expected: `200`.
+
+2. Check that the Telegram webhook endpoint is reachable:
+
+   ```bash
+   curl -sS -X POST https://skillaz-digest.up.railway.app/telegram/webhook \
+     -H 'content-type: application/json' \
+     -d '{"update_id":999999999,"message":{"chat":{"id":0},"text":"/start"}}'
+   ```
+
+   Expected: `{"ok":true}`.
+
+3. Check Railway HTTP logs for real Telegram hits:
+
+   ```bash
+   railway logs --service ReleaseCraft --environment production --http --path /telegram/webhook --lines 20
+   ```
+
+   If there are no recent Telegram requests, the app is probably healthy but Telegram webhook is pointed at the wrong URL or the bot token/webhook was changed.
+
+4. Check the local webhook tests without installing pytest:
+
+   ```bash
+   .venv/bin/python -m unittest tests.test_telegram_webhook -v
+   ```
+
+Local `.env` must include `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` if you want to send real Telegram messages from the local app. Without those values, local web requests can work while the bot cannot answer in Telegram.
 
 ## Current Scope
 
