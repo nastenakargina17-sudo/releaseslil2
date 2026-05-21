@@ -11,6 +11,7 @@ from app.models import (
     ValueCategory,
 )
 from app.services.importers import _preserve_existing_copy_when_ai_falls_back
+from app.services.importers import _preserve_review_state_when_content_is_unchanged
 
 
 class ImporterCopyPreservationTests(unittest.TestCase):
@@ -86,6 +87,80 @@ class ImporterCopyPreservationTests(unittest.TestCase):
             preserved_items[0].description,
             'В модуле Ядро добавили новое улучшение вокруг сценария "Новый пункт", чтобы пользователям было проще выполнять ежедневные операции и быстрее проходить рабочие шаги.',
         )
+
+    def test_review_state_is_preserved_when_imported_content_is_unchanged(self) -> None:
+        existing_release = DigestRelease(
+            id="DEV-1",
+            release_date="2026-02-03",
+            summary="Approved summary.",
+            summary_status=SummaryStatus.APPROVED,
+        )
+        new_release = DigestRelease(
+            id="DEV-1",
+            release_date="2026-02-03",
+            summary="Approved summary.",
+            summary_status=SummaryStatus.DRAFT,
+        )
+        existing_item = _build_item(
+            "digest-old",
+            "DEV-101",
+            "Новый пункт",
+            "Описание.",
+        )
+        existing_item.status = ItemStatus.APPROVED
+        new_item = _build_item(
+            "digest-new",
+            "DEV-101",
+            "Новый пункт",
+            "Описание.",
+        )
+
+        _preserve_review_state_when_content_is_unchanged(
+            existing_release,
+            [existing_item],
+            new_release,
+            [new_item],
+        )
+
+        self.assertEqual(new_release.summary_status, SummaryStatus.APPROVED)
+        self.assertEqual(new_item.status, ItemStatus.APPROVED)
+
+    def test_review_state_resets_when_imported_content_changes(self) -> None:
+        existing_release = DigestRelease(
+            id="DEV-1",
+            release_date="2026-02-03",
+            summary="Approved summary.",
+            summary_status=SummaryStatus.APPROVED,
+        )
+        new_release = DigestRelease(
+            id="DEV-1",
+            release_date="2026-02-03",
+            summary="Changed summary.",
+            summary_status=SummaryStatus.DRAFT,
+        )
+        existing_item = _build_item(
+            "digest-old",
+            "DEV-101",
+            "Новый пункт",
+            "Описание.",
+        )
+        existing_item.status = ItemStatus.APPROVED
+        new_item = _build_item(
+            "digest-new",
+            "DEV-101",
+            "Новый пункт",
+            "Новое описание.",
+        )
+
+        _preserve_review_state_when_content_is_unchanged(
+            existing_release,
+            [existing_item],
+            new_release,
+            [new_item],
+        )
+
+        self.assertEqual(new_release.summary_status, SummaryStatus.DRAFT)
+        self.assertEqual(new_item.status, ItemStatus.DRAFT)
 
 
 def _build_item(item_id: str, source_id: str, title: str, description: str) -> DigestItem:

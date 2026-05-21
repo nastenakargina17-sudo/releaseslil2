@@ -28,6 +28,7 @@ def import_release_from_apis(release_id: str, preserve_existing_copy: bool = Tru
     )
     if preserve_existing_copy:
         _preserve_existing_copy_when_ai_falls_back(existing_release, existing_items, release, digest_items)
+    _preserve_review_state_when_content_is_unchanged(existing_release, existing_items, release, digest_items)
 
     upsert_release(release)
     replace_release_items(release_id, digest_items)
@@ -63,6 +64,57 @@ def _preserve_existing_copy_when_ai_falls_back(existing_release, existing_items,
             continue
         if _looks_like_fallback_description(item) and existing_item.description != item.description:
             item.description = existing_item.description
+
+
+def _preserve_review_state_when_content_is_unchanged(
+    existing_release,
+    existing_items,
+    release,
+    digest_items,
+) -> None:
+    if existing_release and existing_release.summary == release.summary:
+        release.summary_status = existing_release.summary_status
+
+    existing_by_signature = {
+        _item_signature(item): item
+        for item in existing_items
+        if _can_match_review_item(item)
+    }
+    for item in digest_items:
+        if not _can_match_review_item(item):
+            continue
+        existing_item = existing_by_signature.get(_item_signature(item))
+        if existing_item is None:
+            continue
+        if _reviewed_item_content_matches(existing_item, item):
+            item.status = existing_item.status
+
+
+def _can_match_review_item(item) -> bool:
+    return all(
+        hasattr(item, attr)
+        for attr in (
+            "grouping_mode",
+            "type",
+            "source_item_ids",
+            "title",
+            "description",
+            "module",
+            "category",
+            "is_paid_feature",
+            "status",
+        )
+    )
+
+
+def _reviewed_item_content_matches(existing_item, item) -> bool:
+    return (
+        existing_item.title == item.title
+        and existing_item.description == item.description
+        and existing_item.module == item.module
+        and existing_item.category == item.category
+        and existing_item.is_paid_feature == item.is_paid_feature
+    )
 
 
 def _item_signature(item) -> tuple:
