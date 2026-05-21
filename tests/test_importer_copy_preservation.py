@@ -35,6 +35,24 @@ class ImporterCopyPreservationTests(unittest.TestCase):
 
         self.assertEqual(new_release.summary, "Хороший summary от GPT.")
 
+    def test_existing_summary_is_preserved_when_generated_summary_changes(self) -> None:
+        existing_release = DigestRelease(
+            id="DEV-1",
+            release_date="2026-02-03",
+            summary="Уже вычитанный summary.",
+            summary_status=SummaryStatus.APPROVED,
+        )
+        new_release = DigestRelease(
+            id="DEV-1",
+            release_date="2026-02-03",
+            summary="Новый сгенерированный summary.",
+            summary_status=SummaryStatus.DRAFT,
+        )
+
+        _preserve_existing_copy_when_ai_falls_back(existing_release, [], new_release, [])
+
+        self.assertEqual(new_release.summary, "Уже вычитанный summary.")
+
     def test_existing_description_is_preserved_when_new_import_falls_back(self) -> None:
         existing_item = _build_item(
             "digest-old",

@@ -66,7 +66,7 @@ class TelegramBotService:
                 callback_query_id,
                 text=f"Импортирую релиз {release_id}…",
             )
-            import_release_from_apis(release_id, preserve_existing_copy=False)
+            import_release_from_apis(release_id, preserve_existing_copy=True)
             release = get_release(release_id)
             items = list_items(release_id)
             release_date = release.release_date if release else "—"

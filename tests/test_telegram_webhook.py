@@ -99,9 +99,9 @@ class TelegramWebhookTests(unittest.TestCase):
             )
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(import_calls, [("2026-04", False)])
+        self.assertEqual(import_calls, [("2026-04", True)])
         self.assertEqual(notifier.calls[0][0], "answer")
-        self.assertEqual(notifier.calls[1], ("import", "2026-04", False))
+        self.assertEqual(notifier.calls[1], ("import", "2026-04", True))
         self.assertEqual(notifier.calls[2][0], "send")
         self.assertIn("Открыть страницу ревью: https://skillaz/review/2026-04", notifier.calls[2][2])
         self.assertNotIn("/auth/yandex/login", notifier.calls[2][2])

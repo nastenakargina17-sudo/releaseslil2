@@ -50,10 +50,10 @@ def import_release_from_apis(release_id: str, preserve_existing_copy: bool = Tru
 
 
 def _preserve_existing_copy_when_ai_falls_back(existing_release, existing_items, release, digest_items) -> None:
-    fallback_summary = generate_summary(digest_items)
-    if existing_release and release.summary == fallback_summary and existing_release.summary != fallback_summary:
+    if existing_release:
         release.summary = existing_release.summary
 
+    fallback_summary = generate_summary(digest_items)
     existing_by_signature = {
         _item_signature(item): item
         for item in existing_items
