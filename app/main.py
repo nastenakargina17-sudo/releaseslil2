@@ -33,7 +33,7 @@ from app.config import (
     get_telegram_settings,
     load_env_file,
 )
-from app.models import ItemStatus, ItemType, SummaryStatus, ValueCategory
+from app.models import DigestVisibility, ItemStatus, ItemType, SummaryStatus, ValueCategory
 from app.models import PublicationStatus
 from app.notifications.telegram import (
     TelegramNotifier,
@@ -387,6 +387,7 @@ def update_review_item(
     exclude_from_release: Optional[str] = Form(None),
     release_candidate_action: Optional[str] = Form(None),
     item_type: Optional[str] = Form(None),
+    digest_visibility: Optional[str] = Form(None),
     object_version: Optional[int] = Form(None),
 ) -> Response:
     item = get_item(item_id)
@@ -397,6 +398,7 @@ def update_review_item(
 
     effective_status = ItemStatus.EXCLUDED.value if exclude_from_release == "on" else status
     effective_type = item.type
+    effective_visibility = item.digest_visibility
     effective_category = category or None
     effective_description = description
     moved_to_primary = False
@@ -413,8 +415,11 @@ def update_review_item(
             effective_category = None
             effective_description = ""
     elif item.type in {ItemType.NEW_FEATURE, ItemType.CHANGE}:
-        if item_type in {ItemType.NEW_FEATURE.value, ItemType.CHANGE.value}:
+        if item_type in {item_type.value for item_type in ItemType}:
             effective_type = ItemType(item_type)
+
+    if digest_visibility in {visibility.value for visibility in DigestVisibility}:
+        effective_visibility = DigestVisibility(digest_visibility)
 
     try:
         update_item(
@@ -425,6 +430,7 @@ def update_review_item(
             status=effective_status,
             is_paid_feature=is_paid_feature == "on",
             item_type=effective_type.value,
+            digest_visibility=effective_visibility.value,
             expected_version=object_version,
         )
     except StaleObjectError:
@@ -439,6 +445,7 @@ def update_review_item(
                 "item_id": item_id,
                 "status": effective_status,
                 "item_type": effective_type.value,
+                "digest_visibility": effective_visibility.value,
                 "version": updated_item.version if updated_item else object_version,
                 "reload": moved_to_primary,
             }
@@ -802,7 +809,10 @@ def final_digest(request: Request, release_id: str) -> HTMLResponse:
 
 
 def _wants_json(request: Request) -> bool:
-    return request.headers.get("x-requested-with") == "XMLHttpRequest"
+    return (
+        request.headers.get("x-requested-with") == "XMLHttpRequest"
+        or "application/json" in request.headers.get("accept", "")
+    )
 
 
 def _stale_object_response(message: str) -> Response:

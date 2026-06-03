@@ -8,6 +8,7 @@ from app.config import DB_PATH, ensure_directories
 from app.models import (
     DigestItem,
     DigestRelease,
+    DigestVisibility,
     GroupingMode,
     ItemStatus,
     ItemType,
@@ -97,6 +98,7 @@ def init_db() -> None:
         _ensure_column(conn, "digest_items", "source_item_titles", "TEXT NOT NULL DEFAULT '[]'")
         _ensure_column(conn, "digest_items", "source_item_descriptions", "TEXT NOT NULL DEFAULT '[]'")
         _ensure_column(conn, "digest_items", "source_item_modules", "TEXT NOT NULL DEFAULT '[]'")
+        _ensure_column(conn, "digest_items", "digest_visibility", "TEXT NOT NULL DEFAULT 'internal'")
 
 
 def _ensure_column(conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:
@@ -150,9 +152,10 @@ def replace_release_items(release_id: str, items: Iterable[DigestItem]) -> None:
             INSERT INTO digest_items (
                 id, release_id, source_item_ids, title, description, module, type,
                 category, status, is_paid_feature, image_paths, tracker_urls, grouping_mode,
-                source_item_titles, source_item_descriptions, source_item_modules, updated_at
+                source_item_titles, source_item_descriptions, source_item_modules,
+                digest_visibility, updated_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [
                 (
@@ -172,6 +175,7 @@ def replace_release_items(release_id: str, items: Iterable[DigestItem]) -> None:
                     json.dumps(item.source_item_titles),
                     json.dumps(item.source_item_descriptions),
                     json.dumps(item.source_item_modules),
+                    item.digest_visibility.value,
                     _now_text(),
                 )
                 for item in items
@@ -216,7 +220,7 @@ def list_items(release_id: str) -> List[DigestItem]:
             SELECT id, release_id, source_item_ids, title, description, module, type,
                    category, status, is_paid_feature, image_paths, tracker_urls, grouping_mode,
                    source_item_titles, source_item_descriptions, source_item_modules,
-                   version, updated_at
+                   digest_visibility, version, updated_at
             FROM digest_items
             WHERE release_id = ?
             ORDER BY module, title
@@ -233,7 +237,7 @@ def get_item(item_id: str) -> Optional[DigestItem]:
             SELECT id, release_id, source_item_ids, title, description, module, type,
                    category, status, is_paid_feature, image_paths, tracker_urls, grouping_mode,
                    source_item_titles, source_item_descriptions, source_item_modules,
-                   version, updated_at
+                   digest_visibility, version, updated_at
             FROM digest_items
             WHERE id = ?
             """,
@@ -252,16 +256,29 @@ def update_item(
     status: str,
     is_paid_feature: bool,
     item_type: Optional[str] = None,
+    digest_visibility: Optional[str] = None,
     expected_version: Optional[int] = None,
 ) -> None:
     with connect() as conn:
         sql = """
             UPDATE digest_items
             SET title = ?, description = ?, category = ?, status = ?, is_paid_feature = ?,
-                type = COALESCE(?, type), version = version + 1, updated_at = ?
+                type = COALESCE(?, type),
+                digest_visibility = COALESCE(?, digest_visibility),
+                version = version + 1, updated_at = ?
             WHERE id = ?
         """
-        params = [title, description, category, status, 1 if is_paid_feature else 0, item_type, _now_text(), item_id]
+        params = [
+            title,
+            description,
+            category,
+            status,
+            1 if is_paid_feature else 0,
+            item_type,
+            digest_visibility,
+            _now_text(),
+            item_id,
+        ]
         if expected_version is not None:
             sql += " AND version = ?"
             params.append(expected_version)
@@ -315,6 +332,7 @@ def split_epic_item(item_id: str) -> List[DigestItem]:
                 description="",
                 module=module,
                 type=item.type,
+                digest_visibility=item.digest_visibility,
                 category=item.category,
                 status=ItemStatus.DRAFT,
                 is_paid_feature=item.is_paid_feature,
@@ -338,9 +356,10 @@ def split_epic_item(item_id: str) -> List[DigestItem]:
             INSERT INTO digest_items (
                 id, release_id, source_item_ids, title, description, module, type,
                 category, status, is_paid_feature, image_paths, tracker_urls, grouping_mode,
-                source_item_titles, source_item_descriptions, source_item_modules, updated_at
+                source_item_titles, source_item_descriptions, source_item_modules,
+                digest_visibility, updated_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [
                 (
@@ -360,6 +379,7 @@ def split_epic_item(item_id: str) -> List[DigestItem]:
                     json.dumps(split_item.source_item_titles),
                     json.dumps(split_item.source_item_descriptions),
                     json.dumps(split_item.source_item_modules),
+                    split_item.digest_visibility.value,
                     now,
                 )
                 for split_item in split_items
@@ -699,6 +719,7 @@ def _row_to_item(row: sqlite3.Row) -> DigestItem:
         source_item_titles=json.loads(row["source_item_titles"]),
         source_item_descriptions=json.loads(row["source_item_descriptions"]),
         source_item_modules=json.loads(row["source_item_modules"]),
+        digest_visibility=DigestVisibility(row["digest_visibility"]),
         version=row["version"],
         updated_at=row["updated_at"],
     )

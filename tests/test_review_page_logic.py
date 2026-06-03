@@ -153,6 +153,37 @@ class ReviewPageLogicTests(unittest.TestCase):
         self.assertFalse(is_video_media_path("/uploads/demo.png"))
         self.assertFalse(is_video_media_path(""))
 
+    def test_digest_item_visibility_round_trips_through_storage(self) -> None:
+        from app.models import DigestItem, DigestRelease, DigestVisibility, ItemStatus, ItemType
+        from app.storage import init_db, list_items, replace_release_items, upsert_release
+        import app.config
+        import app.storage
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "test.db"
+            app.config.DB_PATH = db_path
+            app.storage.DB_PATH = db_path
+            init_db()
+
+            upsert_release(DigestRelease(id="2026-04", release_date="2026-04-30", summary="Summary"))
+            replace_release_items("2026-04", [
+                DigestItem(
+                    id="item-1",
+                    release_id="2026-04",
+                    source_item_ids=["DEV-1"],
+                    title="Internal admin update",
+                    description="Updated admin behavior",
+                    module="Админка",
+                    type=ItemType.INTERNAL_CHANGE,
+                    digest_visibility=DigestVisibility.INTERNAL,
+                    category=None,
+                    status=ItemStatus.DRAFT,
+                )
+            ])
+
+            [item] = list_items("2026-04")
+            self.assertEqual(item.digest_visibility, DigestVisibility.INTERNAL)
+
 
 class DigestGuardTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -1226,6 +1257,42 @@ class DigestGuardTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["item_type"], ItemType.CHANGE.value)
         self.assertEqual(self.storage.get_item("item-1").type, ItemType.CHANGE)
+
+    def test_review_item_can_update_type_and_visibility(self) -> None:
+        from app.models import DigestItem, DigestVisibility, ItemStatus, ItemType
+        from app.storage import replace_release_items
+
+        replace_release_items("2026-04", [
+            DigestItem(
+                id="feature",
+                release_id="2026-04",
+                source_item_ids=["DEV-1"],
+                title="Feature",
+                description="Feature text",
+                module="Ядро",
+                type=ItemType.NEW_FEATURE,
+                digest_visibility=DigestVisibility.PUBLIC,
+                category=None,
+                status=ItemStatus.DRAFT,
+            )
+        ])
+
+        response = self.client.post(
+            "/review/2026-04/items/feature",
+            data={
+                "title": "Feature",
+                "description": "Feature text",
+                "item_type": "client_customization",
+                "digest_visibility": "internal",
+                "status": "approved",
+            },
+            headers={"Accept": "application/json"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["item_type"], "client_customization")
+        self.assertEqual(payload["digest_visibility"], "internal")
 
     def test_bulk_exclude_items(self) -> None:
         response = self.client.post(
