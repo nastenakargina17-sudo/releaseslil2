@@ -1,4 +1,4 @@
-from app.models import ItemType, SourceItem
+from app.models import DigestVisibility, ItemType, SourceItem
 
 
 def sample_source_items() -> list[SourceItem]:
@@ -10,6 +10,7 @@ def sample_source_items() -> list[SourceItem]:
             description="Добавить пользовательский сценарий согласования релиза",
             module="Релизы",
             type=ItemType.NEW_FEATURE,
+            digest_visibility=DigestVisibility.PUBLIC,
             parent_epic_id="REL-100",
             parent_epic_title="Улучшение процесса согласования релизов",
         ),
@@ -19,7 +20,8 @@ def sample_source_items() -> list[SourceItem]:
             title="Обновить отображение статусов согласования",
             description="Сделать статусы релиза более понятными",
             module="Релизы",
-            type=ItemType.CHANGE,
+            type=ItemType.PRODUCT_IMPROVEMENT,
+            digest_visibility=DigestVisibility.PUBLIC,
             parent_epic_id="REL-100",
             parent_epic_title="Улучшение процесса согласования релизов",
         ),
@@ -30,6 +32,7 @@ def sample_source_items() -> list[SourceItem]:
             description="Исправление ошибки при сохранении фильтра",
             module="Отчеты",
             type=ItemType.BUGFIX,
+            digest_visibility=DigestVisibility.INTERNAL,
         ),
         SourceItem(
             id="OPS-310",
@@ -38,5 +41,6 @@ def sample_source_items() -> list[SourceItem]:
             description="Техническая доработка фоновых задач",
             module="Интеграции",
             type=ItemType.TECHNICAL_IMPROVEMENT,
+            digest_visibility=DigestVisibility.INTERNAL,
         ),
     ]

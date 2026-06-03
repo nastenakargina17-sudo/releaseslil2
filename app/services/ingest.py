@@ -27,7 +27,7 @@ def build_release(
     singles: List[SourceItem] = []
 
     for item in items:
-        if item.type in {ItemType.NEW_FEATURE, ItemType.CHANGE} and item.parent_epic_id:
+        if item.type in {ItemType.NEW_FEATURE, ItemType.CHANGE, ItemType.PRODUCT_IMPROVEMENT} and item.parent_epic_id:
             grouped[item.parent_epic_id].append(item)
         else:
             singles.append(item)
@@ -60,14 +60,20 @@ def build_release(
 def generate_summary(items: List[DigestItem]) -> str:
     release_items = [
         item for item in items
-        if item.type in {ItemType.NEW_FEATURE, ItemType.CHANGE, ItemType.BUGFIX, ItemType.TECHNICAL_IMPROVEMENT}
+        if item.type in {
+            ItemType.NEW_FEATURE,
+            ItemType.CHANGE,
+            ItemType.PRODUCT_IMPROVEMENT,
+            ItemType.BUGFIX,
+            ItemType.TECHNICAL_IMPROVEMENT,
+        }
     ]
     if not release_items:
         return "В этом релизе собраны обновления, которые помогают поддерживать стабильную и предсказуемую работу системы."
 
     total = len(release_items)
     new_features = sum(1 for item in release_items if item.type == ItemType.NEW_FEATURE)
-    changes = sum(1 for item in release_items if item.type == ItemType.CHANGE)
+    changes = sum(1 for item in release_items if item.type in {ItemType.CHANGE, ItemType.PRODUCT_IMPROVEMENT})
     technical = sum(1 for item in release_items if item.type == ItemType.TECHNICAL_IMPROVEMENT)
     bugfixes = sum(1 for item in release_items if item.type == ItemType.BUGFIX)
 
@@ -117,6 +123,7 @@ def _build_epic_digest_item(release_id: str, epic_id: str, epic_items: List[Sour
         description=description,
         module=primary.module,
         type=item_type,
+        digest_visibility=primary.digest_visibility,
         category=category,
         status=default_item_status(item_type),
         tracker_urls=[item.url for item in epic_items],
@@ -147,6 +154,7 @@ def _build_single_digest_item(release_id: str, source_item: SourceItem) -> Diges
         description=description,
         module=source_item.module,
         type=source_item.type,
+        digest_visibility=source_item.digest_visibility,
         category=category,
         status=default_item_status(source_item.type),
         tracker_urls=[source_item.url],

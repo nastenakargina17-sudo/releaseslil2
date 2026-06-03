@@ -61,6 +61,7 @@ class SourceItem:
     description: str
     module: str
     type: ItemType
+    digest_visibility: DigestVisibility = DigestVisibility.INTERNAL
     parent_epic_id: Optional[str] = None
     parent_epic_title: Optional[str] = None
 

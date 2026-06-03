@@ -90,6 +90,34 @@ class ReviewPageLogicTests(unittest.TestCase):
 
         self.assertEqual(item_type, ItemType.RELEASE_CANDIDATE)
 
+    def test_tracker_maps_client_task_to_client_customization_public(self) -> None:
+        from app.clients.tracker import _classify_tracker_item
+        from app.models import DigestVisibility, ItemType
+
+        result = _classify_tracker_item({
+            "type": {"key": "story"},
+            "tags": [],
+            "inTheReleaseDescription": "Клиентский и внутренний",
+            "project": {"primary": {"display": "Client Project"}},
+            "components": [{"display": "Client Task"}],
+        })
+
+        self.assertEqual(result, (ItemType.CLIENT_CUSTOMIZATION, DigestVisibility.PUBLIC))
+
+    def test_tracker_maps_public_product_story_to_product_improvement(self) -> None:
+        from app.clients.tracker import _classify_tracker_item
+        from app.models import DigestVisibility, ItemType
+
+        result = _classify_tracker_item({
+            "type": {"key": "story"},
+            "tags": [],
+            "inTheReleaseDescription": "Клиентский и внутренний",
+            "project": {"primary": {"display": "Other Project"}},
+            "components": [{"display": "ATSCore"}],
+        })
+
+        self.assertEqual(result, (ItemType.PRODUCT_IMPROVEMENT, DigestVisibility.PUBLIC))
+
     def test_client_value_category_labels_are_human_readable(self) -> None:
         from app.models import ValueCategory
         from app.review_utils import CLIENT_CATEGORY_LABELS

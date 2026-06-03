@@ -4,7 +4,7 @@ import urllib.request
 from typing import Any, Dict, List, Optional
 
 from app.config import TrackerSettings
-from app.models import ItemType, SourceItem
+from app.models import DigestVisibility, ItemType, SourceItem
 from app.review_utils import normalize_tracker_issue_url
 
 
@@ -90,9 +90,10 @@ class TrackerAPIClient:
         if raw_type == "epic":
             return None
 
-        item_type = _classify_item_type(item)
-        if item_type is None:
+        classified = _classify_tracker_item(item)
+        if classified is None:
             return None
+        item_type, digest_visibility = classified
         parent_epic_id = None
         parent_epic_title = None
         parent = item.get("parent")
@@ -109,6 +110,7 @@ class TrackerAPIClient:
             description=str(item.get("description") or ""),
             module=_map_module_name(item.get("components") or []),
             type=item_type,
+            digest_visibility=digest_visibility,
             parent_epic_id=parent_epic_id,
             parent_epic_title=parent_epic_title,
         )
@@ -139,7 +141,7 @@ class TrackerAPIClient:
             return json.loads(response.read().decode("utf-8"))
 
 
-def _classify_item_type(item: dict[str, Any]) -> Optional[ItemType]:
+def _classify_tracker_item(item: dict[str, Any]) -> Optional[tuple[ItemType, DigestVisibility]]:
     raw_type = ((item.get("type") or {}).get("key") or "").strip()
     tags = item.get("tags") or []
     tags_set = {str(tag) for tag in tags}
@@ -147,19 +149,31 @@ def _classify_item_type(item: dict[str, Any]) -> Optional[ItemType]:
     project_primary = (((item.get("project") or {}).get("primary") or {}).get("display") or "").strip()
 
     if raw_type == "osibkaS":
-        return ItemType.BUGFIX
+        return ItemType.BUGFIX, DigestVisibility.INTERNAL
 
-    if raw_type == "story":
-        if "Tech🔧" in tags_set:
-            return ItemType.TECHNICAL_IMPROVEMENT
-        if "Product Development" in project_primary and in_release == "Клиентский и внутренний":
-            return ItemType.NEW_FEATURE
-        if in_release == "Только внутренний":
-            return ItemType.CHANGE
-        if in_release == "Нет":
-            return ItemType.RELEASE_CANDIDATE
+    if raw_type != "story":
+        return None
+
+    if "Tech🔧" in tags_set:
+        return ItemType.TECHNICAL_IMPROVEMENT, DigestVisibility.INTERNAL
+    if in_release == "Нет":
+        return ItemType.RELEASE_CANDIDATE, DigestVisibility.INTERNAL
+    if in_release == "Только внутренний":
+        return ItemType.INTERNAL_CHANGE, DigestVisibility.INTERNAL
+    if in_release == "Клиентский и внутренний":
+        if "Product Development" in project_primary:
+            return ItemType.NEW_FEATURE, DigestVisibility.PUBLIC
+        module = _map_module_name(item.get("components") or [])
+        if module == "Клиентский запрос":
+            return ItemType.CLIENT_CUSTOMIZATION, DigestVisibility.PUBLIC
+        return ItemType.PRODUCT_IMPROVEMENT, DigestVisibility.PUBLIC
 
     return None
+
+
+def _classify_item_type(item: dict[str, Any]) -> Optional[ItemType]:
+    classified = _classify_tracker_item(item)
+    return classified[0] if classified else None
 
 
 def _map_module_name(components: List[Any]) -> str:

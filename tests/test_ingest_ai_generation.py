@@ -1,6 +1,6 @@
 import unittest
 
-from app.models import ItemType, SourceItem
+from app.models import DigestVisibility, ItemType, SourceItem
 from app.services.ingest import build_release
 from app.services.openai_generation import (
     _build_item_descriptions_prompt,
@@ -41,7 +41,7 @@ class FakeCopyGenerator:
         return {
             item.id: f"Сгенерированное описание для {item.title}."
             for item in digest_items
-            if item.type in {ItemType.NEW_FEATURE, ItemType.CHANGE}
+            if item.type in {ItemType.NEW_FEATURE, ItemType.PRODUCT_IMPROVEMENT}
         }
 
 
@@ -77,7 +77,7 @@ class IngestAIGenerationTests(unittest.TestCase):
         )
 
         self.assertEqual(release.summary, "Сгенерированное summary.")
-        described_items = [item for item in items if item.type in {ItemType.NEW_FEATURE, ItemType.CHANGE}]
+        described_items = [item for item in items if item.type in {ItemType.NEW_FEATURE, ItemType.PRODUCT_IMPROVEMENT}]
         self.assertTrue(described_items)
         self.assertTrue(all(item.description.startswith("Сгенерированное описание") for item in described_items))
 
@@ -90,7 +90,7 @@ class IngestAIGenerationTests(unittest.TestCase):
         )
 
         self.assertIn("Основные изменения сосредоточены", release.summary)
-        described_items = [item for item in items if item.type in {ItemType.NEW_FEATURE, ItemType.CHANGE}]
+        described_items = [item for item in items if item.type in {ItemType.NEW_FEATURE, ItemType.PRODUCT_IMPROVEMENT}]
         self.assertTrue(described_items)
         self.assertTrue(all(item.description for item in described_items))
         self.assertTrue(all("Сгенерированное описание" not in item.description for item in described_items))
@@ -105,7 +105,7 @@ class IngestAIGenerationTests(unittest.TestCase):
         )
 
         self.assertIn("Основные изменения сосредоточены", release.summary)
-        described_items = [item for item in items if item.type in {ItemType.NEW_FEATURE, ItemType.CHANGE}]
+        described_items = [item for item in items if item.type in {ItemType.NEW_FEATURE, ItemType.PRODUCT_IMPROVEMENT}]
         self.assertTrue(all(item.description.startswith("Сгенерированное описание") for item in described_items))
 
     def test_fallback_item_description_uses_source_text_instead_of_old_template(self) -> None:
@@ -116,7 +116,7 @@ class IngestAIGenerationTests(unittest.TestCase):
         )
 
         feature = next(item for item in items if item.type == ItemType.NEW_FEATURE)
-        change = next(item for item in items if item.type == ItemType.CHANGE)
+        change = next(item for item in items if item.type == ItemType.PRODUCT_IMPROVEMENT)
         self.assertIn("Появилась возможность", feature.description)
         self.assertIn("Обновили", change.description)
         self.assertNotIn("в ежедневной работе", feature.description.lower())
@@ -167,7 +167,7 @@ class IngestAIGenerationTests(unittest.TestCase):
             release_id="2026-05",
             release_date="2026-05-31",
         )
-        eligible_items = [item for item in items if item.type in {ItemType.NEW_FEATURE, ItemType.CHANGE}]
+        eligible_items = [item for item in items if item.type in {ItemType.NEW_FEATURE, ItemType.PRODUCT_IMPROVEMENT}]
         item_sources = {item.id: [source] for item, source in zip(eligible_items, source_items[:len(eligible_items)])}
 
         prompt = _build_item_descriptions_prompt(eligible_items, item_sources)
@@ -195,7 +195,7 @@ class IngestAIGenerationTests(unittest.TestCase):
 
         source_items = _sample_source_items()
         _, items = build_release(source_items, release_id="2026-05", release_date="2026-05-31")
-        eligible_items = [item for item in items if item.type in {ItemType.NEW_FEATURE, ItemType.CHANGE}]
+        eligible_items = [item for item in items if item.type in {ItemType.NEW_FEATURE, ItemType.PRODUCT_IMPROVEMENT}]
         item_sources = {item.id: [source] for item, source in zip(eligible_items, source_items[:len(eligible_items)])}
         rewrite_prompt = _build_item_rewrite_prompt(
             eligible_items,
@@ -264,6 +264,7 @@ def _sample_source_items(include_candidate: bool = False):
             description="Добавить новый сценарий согласования",
             module="Релизы",
             type=ItemType.NEW_FEATURE,
+            digest_visibility=DigestVisibility.PUBLIC,
         ),
         SourceItem(
             id="REL-2",
@@ -271,7 +272,8 @@ def _sample_source_items(include_candidate: bool = False):
             title="Изменить экран статусов",
             description="Сделать статусы релиза понятнее",
             module="Релизы",
-            type=ItemType.CHANGE,
+            type=ItemType.PRODUCT_IMPROVEMENT,
+            digest_visibility=DigestVisibility.PUBLIC,
         ),
         SourceItem(
             id="REL-3",
@@ -280,6 +282,7 @@ def _sample_source_items(include_candidate: bool = False):
             description="Исправление ошибки сохранения",
             module="Релизы",
             type=ItemType.BUGFIX,
+            digest_visibility=DigestVisibility.INTERNAL,
         ),
     ]
     if include_candidate:
@@ -291,6 +294,7 @@ def _sample_source_items(include_candidate: bool = False):
                 description="Пока не решили, выносить ли в релиз.",
                 module="Релизы",
                 type=ItemType.RELEASE_CANDIDATE,
+                digest_visibility=DigestVisibility.INTERNAL,
             )
         )
     return items
