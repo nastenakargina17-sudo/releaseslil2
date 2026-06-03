@@ -106,6 +106,7 @@ class ReviewPageLogicTests(unittest.TestCase):
         from app.review_utils import ITEM_TYPE_LABELS
 
         self.assertEqual(ITEM_TYPE_LABELS[ItemType.NEW_FEATURE], "Новый функционал")
+        self.assertEqual(ITEM_TYPE_LABELS[ItemType.CHANGE], "Продуктовое улучшение")
         self.assertEqual(ITEM_TYPE_LABELS[ItemType.PRODUCT_IMPROVEMENT], "Продуктовое улучшение")
         self.assertEqual(ITEM_TYPE_LABELS[ItemType.CLIENT_CUSTOMIZATION], "Клиентская доработка")
         self.assertEqual(ITEM_TYPE_LABELS[ItemType.INTERNAL_CHANGE], "Внутреннее изменение")
@@ -119,17 +120,25 @@ class ReviewPageLogicTests(unittest.TestCase):
         self.assertEqual(DIGEST_VISIBILITY_LABELS[DigestVisibility.PUBLIC], "Публичный дайджест")
         self.assertEqual(DIGEST_VISIBILITY_LABELS[DigestVisibility.INTERNAL], "Внутренний обзор")
         self.assertEqual(default_digest_visibility(ItemType.NEW_FEATURE), DigestVisibility.PUBLIC)
+        self.assertEqual(default_digest_visibility(ItemType.CHANGE), DigestVisibility.PUBLIC)
         self.assertEqual(default_digest_visibility(ItemType.PRODUCT_IMPROVEMENT), DigestVisibility.PUBLIC)
         self.assertEqual(default_digest_visibility(ItemType.CLIENT_CUSTOMIZATION), DigestVisibility.INTERNAL)
         self.assertEqual(default_digest_visibility(ItemType.INTERNAL_CHANGE), DigestVisibility.INTERNAL)
         self.assertEqual(default_digest_visibility(ItemType.TECHNICAL_IMPROVEMENT), DigestVisibility.INTERNAL)
         self.assertEqual(default_digest_visibility(ItemType.BUGFIX), DigestVisibility.INTERNAL)
 
+    def test_legacy_change_defaults_to_product_improvement_category(self) -> None:
+        from app.models import ItemType, ValueCategory
+        from app.review_utils import default_item_category
+
+        self.assertEqual(default_item_category(ItemType.CHANGE), ValueCategory.CLARITY_TRANSPARENCY)
+
     def test_description_generation_rules_follow_change_type_only(self) -> None:
         from app.models import ItemType
         from app.review_utils import should_collect_description
 
         self.assertTrue(should_collect_description(ItemType.NEW_FEATURE))
+        self.assertTrue(should_collect_description(ItemType.CHANGE))
         self.assertTrue(should_collect_description(ItemType.PRODUCT_IMPROVEMENT))
         self.assertTrue(should_collect_description(ItemType.CLIENT_CUSTOMIZATION))
         self.assertTrue(should_collect_description(ItemType.INTERNAL_CHANGE))
