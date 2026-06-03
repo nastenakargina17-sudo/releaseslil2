@@ -289,6 +289,97 @@ class TelegramWebhookTests(unittest.TestCase):
         )
         notifier.send_message.assert_not_called()
 
+    def test_review_status_message_uses_digest_taxonomy_labels(self) -> None:
+        from app.models import DigestItem, DigestRelease, DigestVisibility, ItemStatus, ItemType
+        from app.notifications.telegram import build_review_status_message
+
+        release = DigestRelease(id="2026-04", release_date="2026-04-30", summary="Summary")
+        items = [
+            DigestItem(
+                id="feature",
+                release_id="2026-04",
+                source_item_ids=[],
+                title="Feature",
+                description="Feature description",
+                module="Core",
+                type=ItemType.NEW_FEATURE,
+                digest_visibility=DigestVisibility.PUBLIC,
+                status=ItemStatus.APPROVED,
+            ),
+            DigestItem(
+                id="fix",
+                release_id="2026-04",
+                source_item_ids=[],
+                title="Fix",
+                description="",
+                module="Core",
+                type=ItemType.BUGFIX,
+                digest_visibility=DigestVisibility.INTERNAL,
+                status=ItemStatus.APPROVED,
+            ),
+        ]
+
+        message = build_review_status_message(release, items)
+
+        self.assertIn("Новый функционал: 1", message)
+        self.assertIn("Продуктовое улучшение: 0", message)
+        self.assertIn("Клиентская доработка: 0", message)
+        self.assertIn("Внутреннее изменение: 0", message)
+        self.assertIn("Техническая итерация: 0", message)
+        self.assertIn("Исправление: 1", message)
+
+    def test_digest_ready_message_uses_new_taxonomy_and_legacy_change_compatibility(self) -> None:
+        from app.models import DigestItem, DigestRelease, DigestVisibility, ItemStatus, ItemType
+        from app.notifications.telegram import build_digest_ready_message
+
+        release = DigestRelease(id="2026-04", release_date="2026-04-30", summary="Summary")
+        items = [
+            DigestItem(
+                id="legacy-change",
+                release_id="2026-04",
+                source_item_ids=[],
+                title="Legacy improvement",
+                description="Legacy description",
+                module="Core",
+                type=ItemType.CHANGE,
+                digest_visibility=DigestVisibility.PUBLIC,
+                status=ItemStatus.APPROVED,
+            ),
+            DigestItem(
+                id="client-flow",
+                release_id="2026-04",
+                source_item_ids=[],
+                title="Client flow",
+                description="Client description",
+                module="Hiring",
+                type=ItemType.CLIENT_CUSTOMIZATION,
+                digest_visibility=DigestVisibility.PUBLIC,
+                status=ItemStatus.APPROVED,
+            ),
+            DigestItem(
+                id="tech",
+                release_id="2026-04",
+                source_item_ids=[],
+                title="Tech cleanup",
+                description="",
+                module="Platform",
+                type=ItemType.TECHNICAL_IMPROVEMENT,
+                digest_visibility=DigestVisibility.INTERNAL,
+                status=ItemStatus.APPROVED,
+            ),
+        ]
+
+        message = build_digest_ready_message(release, items)
+
+        self.assertIn("Продуктовое улучшение: 1", message)
+        self.assertIn("Клиентская доработка: 1", message)
+        self.assertIn("Техническая итерация: 1", message)
+        self.assertIn("- Legacy improvement (Core)", message)
+        self.assertIn("- Client flow (Hiring)", message)
+        self.assertNotIn("- Tech cleanup (Platform)", message)
+        self.assertNotIn("Новые фичи", message)
+        self.assertNotIn("Багфиксы", message)
+
 
 if __name__ == "__main__":
     unittest.main()

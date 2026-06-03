@@ -202,29 +202,42 @@ class ReviewPageLogicTests(unittest.TestCase):
         import app.storage
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            db_path = Path(temp_dir) / "test.db"
-            app.config.DB_PATH = db_path
-            app.storage.DB_PATH = db_path
-            init_db()
+            original_db_path = app.config.DB_PATH
+            original_storage_db_path = app.storage.DB_PATH
+            original_data_dir = app.config.DATA_DIR
+            original_uploads_dir = app.config.UPLOADS_DIR
+            try:
+                temp_path = Path(temp_dir)
+                db_path = temp_path / "data" / "test.db"
+                app.config.DATA_DIR = temp_path / "data"
+                app.config.UPLOADS_DIR = temp_path / "uploads"
+                app.config.DB_PATH = db_path
+                app.storage.DB_PATH = db_path
+                init_db()
 
-            upsert_release(DigestRelease(id="2026-04", release_date="2026-04-30", summary="Summary"))
-            replace_release_items("2026-04", [
-                DigestItem(
-                    id="item-1",
-                    release_id="2026-04",
-                    source_item_ids=["DEV-1"],
-                    title="Internal admin update",
-                    description="Updated admin behavior",
-                    module="Админка",
-                    type=ItemType.INTERNAL_CHANGE,
-                    digest_visibility=DigestVisibility.PUBLIC,
-                    category=None,
-                    status=ItemStatus.DRAFT,
-                )
-            ])
+                upsert_release(DigestRelease(id="2026-04", release_date="2026-04-30", summary="Summary"))
+                replace_release_items("2026-04", [
+                    DigestItem(
+                        id="item-1",
+                        release_id="2026-04",
+                        source_item_ids=["DEV-1"],
+                        title="Internal admin update",
+                        description="Updated admin behavior",
+                        module="Админка",
+                        type=ItemType.INTERNAL_CHANGE,
+                        digest_visibility=DigestVisibility.PUBLIC,
+                        category=None,
+                        status=ItemStatus.DRAFT,
+                    )
+                ])
 
-            [item] = list_items("2026-04")
-            self.assertEqual(item.digest_visibility, DigestVisibility.PUBLIC)
+                [item] = list_items("2026-04")
+                self.assertEqual(item.digest_visibility, DigestVisibility.PUBLIC)
+            finally:
+                app.config.DB_PATH = original_db_path
+                app.storage.DB_PATH = original_storage_db_path
+                app.config.DATA_DIR = original_data_dir
+                app.config.UPLOADS_DIR = original_uploads_dir
 
 
 class DigestGuardTests(unittest.TestCase):

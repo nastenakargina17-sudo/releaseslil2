@@ -1,10 +1,22 @@
 import json
 import httpx
+from collections import Counter
 from pathlib import Path
 from typing import Any, Optional
 
 from app.config import TelegramSettings
 from app.models import DigestItem, DigestRelease, ItemStatus, ItemType, SummaryStatus
+from app.review_utils import ITEM_TYPE_LABELS, should_collect_description
+
+
+REPORT_ITEM_TYPES = [
+    ItemType.NEW_FEATURE,
+    ItemType.PRODUCT_IMPROVEMENT,
+    ItemType.CLIENT_CUSTOMIZATION,
+    ItemType.INTERNAL_CHANGE,
+    ItemType.TECHNICAL_IMPROVEMENT,
+    ItemType.BUGFIX,
+]
 
 
 class TelegramNotificationError(RuntimeError):
@@ -151,6 +163,7 @@ def build_review_status_message(
         f"Summary: {release.summary_status.value}",
         f"Пункты: всего {total}, approved {approved}, excluded {excluded}, reviewed {reviewed}, draft {draft}",
     ]
+    lines.extend(_build_item_type_count_lines(items))
     if review_url:
         lines.append(f"Открыть ревью: {review_url}")
     return "\n".join(lines)
@@ -161,21 +174,16 @@ def build_digest_ready_message(
     items: list[DigestItem],
     digest_url: Optional[str] = None,
 ) -> str:
-    new_features = sum(1 for item in items if item.type == ItemType.NEW_FEATURE)
-    changes = sum(1 for item in items if item.type == ItemType.CHANGE)
-    bugfixes = sum(1 for item in items if item.type == ItemType.BUGFIX)
-    technical = sum(1 for item in items if item.type == ItemType.TECHNICAL_IMPROVEMENT)
     lines = [
         f"Дайджест по релизу {release.id} готов",
         f"Плановая дата релиза: {release.release_date}",
         f"Summary: {release.summary_status.value}",
-        f"Новые фичи: {new_features}",
-        f"Изменения: {changes}",
-        f"Багфиксы: {bugfixes}",
-        f"Технические доработки: {technical}",
     ]
+    lines.extend(_build_item_type_count_lines(items))
     narrative_items = [
-        item for item in items if item.type in {ItemType.NEW_FEATURE, ItemType.CHANGE}
+        item
+        for item in items
+        if item.type != ItemType.RELEASE_CANDIDATE and should_collect_description(item.type)
     ]
     if narrative_items:
         lines.append("")
@@ -186,6 +194,24 @@ def build_digest_ready_message(
     if digest_url:
         lines.append(f"Открыть digest: {digest_url}")
     return "\n".join(lines)
+
+
+def _normalized_report_item_type(item_type: ItemType) -> ItemType:
+    if item_type == ItemType.CHANGE:
+        return ItemType.PRODUCT_IMPROVEMENT
+    return item_type
+
+
+def _build_item_type_count_lines(items: list[DigestItem]) -> list[str]:
+    type_counts = Counter(
+        _normalized_report_item_type(item.type)
+        for item in items
+        if item.type != ItemType.RELEASE_CANDIDATE
+    )
+    return [
+        f"{ITEM_TYPE_LABELS[item_type]}: {type_counts[item_type]}"
+        for item_type in REPORT_ITEM_TYPES
+    ]
 
 
 def release_is_ready_for_digest(release: DigestRelease, items: list[DigestItem]) -> bool:
