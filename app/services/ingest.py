@@ -60,28 +60,33 @@ def build_release(
 def generate_summary(items: List[DigestItem]) -> str:
     release_items = [
         item for item in items
-        if item.type in {
-            ItemType.NEW_FEATURE,
-            ItemType.CHANGE,
-            ItemType.PRODUCT_IMPROVEMENT,
-            ItemType.BUGFIX,
-            ItemType.TECHNICAL_IMPROVEMENT,
-        }
+        if should_collect_description(item.type)
+        or item.type in {ItemType.BUGFIX, ItemType.TECHNICAL_IMPROVEMENT}
     ]
     if not release_items:
         return "В этом релизе собраны обновления, которые помогают поддерживать стабильную и предсказуемую работу системы."
 
+    focus_items = [item for item in release_items if should_collect_description(item.type)] or release_items
     total = len(release_items)
     new_features = sum(1 for item in release_items if item.type == ItemType.NEW_FEATURE)
-    changes = sum(1 for item in release_items if item.type in {ItemType.CHANGE, ItemType.PRODUCT_IMPROVEMENT})
+    changes = sum(
+        1
+        for item in release_items
+        if item.type in {
+            ItemType.CHANGE,
+            ItemType.PRODUCT_IMPROVEMENT,
+            ItemType.CLIENT_CUSTOMIZATION,
+            ItemType.INTERNAL_CHANGE,
+        }
+    )
     technical = sum(1 for item in release_items if item.type == ItemType.TECHNICAL_IMPROVEMENT)
     bugfixes = sum(1 for item in release_items if item.type == ItemType.BUGFIX)
 
-    dominant_module = _top_names((item.module for item in release_items), limit=1)
+    dominant_module = _top_names((item.module for item in focus_items), limit=1)
     top_categories = _top_names(
         (
             CATEGORY_LABELS[item.category]
-            for item in release_items
+            for item in focus_items
             if item.category is not None
         ),
         limit=2,

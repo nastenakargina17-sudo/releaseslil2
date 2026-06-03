@@ -1,11 +1,14 @@
 import unittest
 
+from app.config import OpenAISettings
 from app.models import DigestVisibility, ItemType, SourceItem
 from app.services.ingest import build_release
 from app.services.openai_generation import (
+    OpenAIReleaseCopyGenerator,
     _build_item_descriptions_prompt,
     _build_item_repair_prompt,
     _build_item_rewrite_prompt,
+    _build_summary_stats,
     _build_summary_prompt,
     _build_summary_repair_prompt,
     _build_summary_rewrite_prompt,
@@ -65,6 +68,25 @@ class RewriteFailingGenerator(FakeCopyGenerator):
                 {"item_id": "item-1", "description": "Добавили полезную возможность."}
             ]
         }
+
+
+class RecordingCopyGenerator(OpenAIReleaseCopyGenerator):
+    def __init__(self) -> None:
+        super().__init__(OpenAISettings(api_key="test-key", model="test-model", timeout_seconds=1))
+        self.eligible_item_ids = []
+
+    def _generate_item_descriptions_batch(self, eligible_items, item_sources):
+        self.eligible_item_ids.extend(item.id for item in eligible_items)
+        return {
+            item.id: f"Черновое описание для {item.title}."
+            for item in eligible_items
+        }
+
+    def _rewrite_item_descriptions(self, eligible_items, item_sources, draft_descriptions):
+        return draft_descriptions
+
+    def _repair_item_descriptions_if_needed(self, eligible_items, item_sources, descriptions):
+        return descriptions
 
 
 class IngestAIGenerationTests(unittest.TestCase):
@@ -133,6 +155,83 @@ class IngestAIGenerationTests(unittest.TestCase):
         candidate = next(item for item in items if item.type == ItemType.RELEASE_CANDIDATE)
         self.assertEqual(candidate.description, "")
         self.assertNotIn("Кандидаты", release.summary)
+
+    def test_real_ai_description_eligibility_uses_description_bearing_types(self) -> None:
+        _, items = build_release(
+            _description_eligibility_source_items(),
+            release_id="2026-05",
+            release_date="2026-05-31",
+        )
+        item_sources = {item.id: [] for item in items}
+        generator = RecordingCopyGenerator()
+
+        descriptions = generator.generate_item_descriptions(items, item_sources)
+
+        expected_ids = {
+            item.id
+            for item in items
+            if item.type in {
+                ItemType.NEW_FEATURE,
+                ItemType.PRODUCT_IMPROVEMENT,
+                ItemType.CLIENT_CUSTOMIZATION,
+                ItemType.INTERNAL_CHANGE,
+            }
+        }
+        excluded_ids = {
+            item.id
+            for item in items
+            if item.type in {ItemType.BUGFIX, ItemType.TECHNICAL_IMPROVEMENT}
+        }
+        self.assertEqual(set(generator.eligible_item_ids), expected_ids)
+        self.assertEqual(set(descriptions), expected_ids)
+        self.assertFalse(excluded_ids & set(generator.eligible_item_ids))
+
+    def test_summary_stats_count_new_taxonomy_as_changes(self) -> None:
+        _, items = build_release(
+            _description_eligibility_source_items(),
+            release_id="2026-05",
+            release_date="2026-05-31",
+        )
+
+        stats = _build_summary_stats(items)
+
+        self.assertEqual(stats["total_tasks"], 6)
+        self.assertEqual(stats["type_counts"]["new_features"], 1)
+        self.assertEqual(stats["type_counts"]["changes"], 3)
+        self.assertEqual(stats["type_counts"]["technical_iterations"], 1)
+        self.assertEqual(stats["type_counts"]["bugs"], 1)
+
+    def test_fallback_summary_includes_client_and_internal_changes(self) -> None:
+        release, _ = build_release(
+            [
+                SourceItem(
+                    id="REL-10",
+                    url="https://tracker.yandex.ru/REL-10",
+                    title="Настроить клиентский отчет",
+                    description="Добавить отчет для клиентской команды.",
+                    module="Клиентский запрос",
+                    type=ItemType.CLIENT_CUSTOMIZATION,
+                    digest_visibility=DigestVisibility.PUBLIC,
+                ),
+                SourceItem(
+                    id="REL-11",
+                    url="https://tracker.yandex.ru/REL-11",
+                    title="Обновить внутреннюю проверку",
+                    description="Упростить внутреннюю проверку релизных задач.",
+                    module="Релизы",
+                    type=ItemType.INTERNAL_CHANGE,
+                    digest_visibility=DigestVisibility.INTERNAL,
+                ),
+            ],
+            release_id="2026-05",
+            release_date="2026-05-31",
+        )
+
+        self.assertNotEqual(
+            release.summary,
+            "В этом релизе собраны обновления, которые помогают поддерживать стабильную и предсказуемую работу системы.",
+        )
+        self.assertIn("Основные изменения сосредоточены", release.summary)
 
     def test_summary_prompt_requests_non_log_style(self) -> None:
         release, _ = build_release(
@@ -298,6 +397,65 @@ def _sample_source_items(include_candidate: bool = False):
             )
         )
     return items
+
+
+def _description_eligibility_source_items():
+    return [
+        SourceItem(
+            id="REL-1",
+            url="https://tracker.yandex.ru/REL-1",
+            title="Новая форма согласования",
+            description="Добавить новый сценарий согласования.",
+            module="Релизы",
+            type=ItemType.NEW_FEATURE,
+            digest_visibility=DigestVisibility.PUBLIC,
+        ),
+        SourceItem(
+            id="REL-2",
+            url="https://tracker.yandex.ru/REL-2",
+            title="Изменить экран статусов",
+            description="Сделать статусы релиза понятнее.",
+            module="Релизы",
+            type=ItemType.PRODUCT_IMPROVEMENT,
+            digest_visibility=DigestVisibility.PUBLIC,
+        ),
+        SourceItem(
+            id="REL-3",
+            url="https://tracker.yandex.ru/REL-3",
+            title="Настроить клиентский отчет",
+            description="Добавить отчет для клиентской команды.",
+            module="Клиентский запрос",
+            type=ItemType.CLIENT_CUSTOMIZATION,
+            digest_visibility=DigestVisibility.PUBLIC,
+        ),
+        SourceItem(
+            id="REL-4",
+            url="https://tracker.yandex.ru/REL-4",
+            title="Обновить внутреннюю проверку",
+            description="Упростить внутреннюю проверку релизных задач.",
+            module="Релизы",
+            type=ItemType.INTERNAL_CHANGE,
+            digest_visibility=DigestVisibility.INTERNAL,
+        ),
+        SourceItem(
+            id="REL-5",
+            url="https://tracker.yandex.ru/REL-5",
+            title="Исправить сохранение",
+            description="Исправление ошибки сохранения.",
+            module="Релизы",
+            type=ItemType.BUGFIX,
+            digest_visibility=DigestVisibility.INTERNAL,
+        ),
+        SourceItem(
+            id="REL-6",
+            url="https://tracker.yandex.ru/REL-6",
+            title="Оптимизировать синхронизацию",
+            description="Техническая оптимизация синхронизации.",
+            module="Интеграции",
+            type=ItemType.TECHNICAL_IMPROVEMENT,
+            digest_visibility=DigestVisibility.INTERNAL,
+        ),
+    ]
 
 
 if __name__ == "__main__":

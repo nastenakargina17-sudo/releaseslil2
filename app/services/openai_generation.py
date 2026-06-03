@@ -8,7 +8,7 @@ import httpx
 
 from app.config import OpenAISettings
 from app.models import DigestItem, DigestRelease, GroupingMode, ItemType, SourceItem
-from app.review_utils import CATEGORY_LABELS
+from app.review_utils import CATEGORY_LABELS, should_collect_description
 
 
 class OpenAIGenerationError(RuntimeError):
@@ -80,7 +80,7 @@ class OpenAIReleaseCopyGenerator:
     ) -> Dict[str, str]:
         eligible_items = [
             item for item in digest_items
-            if item.type in {ItemType.NEW_FEATURE, ItemType.CHANGE}
+            if should_collect_description(item.type)
         ]
         if not eligible_items:
             return {}
@@ -263,12 +263,8 @@ def _build_summary_stats(items: Iterable[DigestItem]) -> dict:
     ordered_items = [
         item
         for item in items
-        if item.type in {
-            ItemType.NEW_FEATURE,
-            ItemType.CHANGE,
-            ItemType.TECHNICAL_IMPROVEMENT,
-            ItemType.BUGFIX,
-        }
+        if should_collect_description(item.type)
+        or item.type in {ItemType.TECHNICAL_IMPROVEMENT, ItemType.BUGFIX}
     ]
     type_counts = Counter(item.type.value for item in ordered_items)
     module_counts = Counter(item.module for item in ordered_items)
@@ -284,7 +280,15 @@ def _build_summary_stats(items: Iterable[DigestItem]) -> dict:
     return {
         "total_tasks": len(ordered_items),
         "type_counts": {
-            "changes": type_counts[ItemType.CHANGE.value],
+            "changes": sum(
+                type_counts[item_type.value]
+                for item_type in {
+                    ItemType.CHANGE,
+                    ItemType.PRODUCT_IMPROVEMENT,
+                    ItemType.CLIENT_CUSTOMIZATION,
+                    ItemType.INTERNAL_CHANGE,
+                }
+            ),
             "new_features": type_counts[ItemType.NEW_FEATURE.value],
             "technical_iterations": type_counts[ItemType.TECHNICAL_IMPROVEMENT.value],
             "bugs": type_counts[ItemType.BUGFIX.value],
