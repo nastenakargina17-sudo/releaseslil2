@@ -1339,6 +1339,60 @@ class DigestGuardTests(unittest.TestCase):
         self.assertEqual(updated_item.digest_visibility, DigestVisibility.INTERNAL)
         self.assertEqual(updated_item.type, ItemType.CLIENT_CUSTOMIZATION)
 
+    def test_review_page_renders_change_type_and_visibility_controls(self) -> None:
+        from app.models import DigestItem, DigestVisibility, ItemStatus, ItemType
+        from app.storage import replace_release_items
+
+        replace_release_items("2026-04", [
+            DigestItem(
+                id="client-flow",
+                release_id="2026-04",
+                source_item_ids=["DEV-1"],
+                title="Client flow",
+                description="Client flow text",
+                module="AI",
+                type=ItemType.CLIENT_CUSTOMIZATION,
+                digest_visibility=DigestVisibility.INTERNAL,
+                category=None,
+                status=ItemStatus.DRAFT,
+            )
+        ])
+
+        response = self.client.get("/review/2026-04")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Тип изменения", response.text)
+        self.assertIn("Клиентская доработка", response.text)
+        self.assertIn("Видимость", response.text)
+        self.assertIn("Внутренний обзор", response.text)
+        self.assertIn('data-visibility-filter', response.text)
+
+    def test_review_page_treats_legacy_change_as_product_improvement(self) -> None:
+        from app.models import DigestItem, DigestVisibility, ItemStatus, ItemType
+        from app.storage import replace_release_items
+
+        replace_release_items("2026-04", [
+            DigestItem(
+                id="legacy-change",
+                release_id="2026-04",
+                source_item_ids=["DEV-1"],
+                title="Legacy change",
+                description="Legacy change text",
+                module="Ядро",
+                type=ItemType.CHANGE,
+                digest_visibility=DigestVisibility.PUBLIC,
+                category=None,
+                status=ItemStatus.DRAFT,
+            )
+        ])
+
+        response = self.client.get("/review/2026-04")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('data-item-type="product_improvement"', response.text)
+        self.assertIn("Продуктовое улучшение", response.text)
+        self.assertIn('<option value="product_improvement" selected>Продуктовое улучшение</option>', response.text)
+
     def test_review_item_rejects_invalid_digest_visibility(self) -> None:
         from app.models import DigestItem, DigestVisibility, ItemStatus, ItemType
         from app.storage import replace_release_items
