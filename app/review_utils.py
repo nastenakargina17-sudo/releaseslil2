@@ -39,6 +39,7 @@ DIGEST_VISIBILITY_LABELS = {
 
 ITEM_TYPE_LABELS = {
     ItemType.NEW_FEATURE: "Новый функционал",
+    ItemType.CHANGE: "Продуктовое улучшение",
     ItemType.PRODUCT_IMPROVEMENT: "Продуктовое улучшение",
     ItemType.CLIENT_CUSTOMIZATION: "Клиентская доработка",
     ItemType.INTERNAL_CHANGE: "Внутреннее изменение",
@@ -78,7 +79,7 @@ def default_item_status(item_type: ItemType) -> ItemStatus:
 
 
 def default_digest_visibility(item_type: ItemType) -> DigestVisibility:
-    if item_type in {ItemType.NEW_FEATURE, ItemType.PRODUCT_IMPROVEMENT}:
+    if item_type in {ItemType.NEW_FEATURE, ItemType.CHANGE, ItemType.PRODUCT_IMPROVEMENT}:
         return DigestVisibility.PUBLIC
     return DigestVisibility.INTERNAL
 
@@ -87,6 +88,7 @@ def default_item_category(item_type: ItemType) -> Optional[ValueCategory]:
     if item_type == ItemType.NEW_FEATURE:
         return ValueCategory.DAILY_WORK_CONVENIENCE
     if item_type in {
+        ItemType.CHANGE,
         ItemType.PRODUCT_IMPROVEMENT,
         ItemType.CLIENT_CUSTOMIZATION,
         ItemType.INTERNAL_CHANGE,

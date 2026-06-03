@@ -5,6 +5,8 @@ from typing import List, Optional
 
 class ItemType(str, Enum):
     NEW_FEATURE = "new_feature"
+    # Legacy transitional value kept until import/review/publication paths migrate to PRODUCT_IMPROVEMENT.
+    CHANGE = "change"
     PRODUCT_IMPROVEMENT = "product_improvement"
     CLIENT_CUSTOMIZATION = "client_customization"
     INTERNAL_CHANGE = "internal_change"
