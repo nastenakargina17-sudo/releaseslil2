@@ -101,6 +101,41 @@ class ReviewPageLogicTests(unittest.TestCase):
         self.assertEqual(CLIENT_CATEGORY_LABELS[ValueCategory.BETTER_CONTROL], "Больше контроля")
         self.assertEqual(CLIENT_CATEGORY_LABELS[ValueCategory.LESS_COMMUNICATION_OVERHEAD], "Меньше ручных согласований")
 
+    def test_change_type_labels_are_human_readable(self) -> None:
+        from app.models import ItemType
+        from app.review_utils import ITEM_TYPE_LABELS
+
+        self.assertEqual(ITEM_TYPE_LABELS[ItemType.NEW_FEATURE], "Новый функционал")
+        self.assertEqual(ITEM_TYPE_LABELS[ItemType.PRODUCT_IMPROVEMENT], "Продуктовое улучшение")
+        self.assertEqual(ITEM_TYPE_LABELS[ItemType.CLIENT_CUSTOMIZATION], "Клиентская доработка")
+        self.assertEqual(ITEM_TYPE_LABELS[ItemType.INTERNAL_CHANGE], "Внутреннее изменение")
+        self.assertEqual(ITEM_TYPE_LABELS[ItemType.TECHNICAL_IMPROVEMENT], "Техническая итерация")
+        self.assertEqual(ITEM_TYPE_LABELS[ItemType.BUGFIX], "Исправление")
+
+    def test_visibility_labels_and_defaults_are_human_readable(self) -> None:
+        from app.models import DigestVisibility, ItemType
+        from app.review_utils import DIGEST_VISIBILITY_LABELS, default_digest_visibility
+
+        self.assertEqual(DIGEST_VISIBILITY_LABELS[DigestVisibility.PUBLIC], "Публичный дайджест")
+        self.assertEqual(DIGEST_VISIBILITY_LABELS[DigestVisibility.INTERNAL], "Внутренний обзор")
+        self.assertEqual(default_digest_visibility(ItemType.NEW_FEATURE), DigestVisibility.PUBLIC)
+        self.assertEqual(default_digest_visibility(ItemType.PRODUCT_IMPROVEMENT), DigestVisibility.PUBLIC)
+        self.assertEqual(default_digest_visibility(ItemType.CLIENT_CUSTOMIZATION), DigestVisibility.INTERNAL)
+        self.assertEqual(default_digest_visibility(ItemType.INTERNAL_CHANGE), DigestVisibility.INTERNAL)
+        self.assertEqual(default_digest_visibility(ItemType.TECHNICAL_IMPROVEMENT), DigestVisibility.INTERNAL)
+        self.assertEqual(default_digest_visibility(ItemType.BUGFIX), DigestVisibility.INTERNAL)
+
+    def test_description_generation_rules_follow_change_type_only(self) -> None:
+        from app.models import ItemType
+        from app.review_utils import should_collect_description
+
+        self.assertTrue(should_collect_description(ItemType.NEW_FEATURE))
+        self.assertTrue(should_collect_description(ItemType.PRODUCT_IMPROVEMENT))
+        self.assertTrue(should_collect_description(ItemType.CLIENT_CUSTOMIZATION))
+        self.assertTrue(should_collect_description(ItemType.INTERNAL_CHANGE))
+        self.assertFalse(should_collect_description(ItemType.TECHNICAL_IMPROVEMENT))
+        self.assertFalse(should_collect_description(ItemType.BUGFIX))
+
     def test_digest_media_helper_detects_video_paths(self) -> None:
         from app.review_utils import is_video_media_path
 

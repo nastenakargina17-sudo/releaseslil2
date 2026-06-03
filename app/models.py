@@ -5,10 +5,17 @@ from typing import List, Optional
 
 class ItemType(str, Enum):
     NEW_FEATURE = "new_feature"
-    CHANGE = "change"
+    PRODUCT_IMPROVEMENT = "product_improvement"
+    CLIENT_CUSTOMIZATION = "client_customization"
+    INTERNAL_CHANGE = "internal_change"
     BUGFIX = "bugfix"
     TECHNICAL_IMPROVEMENT = "technical_improvement"
     RELEASE_CANDIDATE = "release_candidate"
+
+
+class DigestVisibility(str, Enum):
+    PUBLIC = "public"
+    INTERNAL = "internal"
 
 
 class ItemStatus(str, Enum):
@@ -65,7 +72,8 @@ class DigestItem:
     description: str
     module: str
     type: ItemType
-    category: Optional[ValueCategory]
+    digest_visibility: DigestVisibility = DigestVisibility.INTERNAL
+    category: Optional[ValueCategory] = None
     status: ItemStatus = ItemStatus.DRAFT
     is_paid_feature: bool = False
     image_paths: List[str] = field(default_factory=list)
