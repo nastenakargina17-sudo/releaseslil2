@@ -175,14 +175,14 @@ class ReviewPageLogicTests(unittest.TestCase):
                     description="Updated admin behavior",
                     module="Админка",
                     type=ItemType.INTERNAL_CHANGE,
-                    digest_visibility=DigestVisibility.INTERNAL,
+                    digest_visibility=DigestVisibility.PUBLIC,
                     category=None,
                     status=ItemStatus.DRAFT,
                 )
             ])
 
             [item] = list_items("2026-04")
-            self.assertEqual(item.digest_visibility, DigestVisibility.INTERNAL)
+            self.assertEqual(item.digest_visibility, DigestVisibility.PUBLIC)
 
 
 class DigestGuardTests(unittest.TestCase):
