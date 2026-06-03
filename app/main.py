@@ -106,6 +106,15 @@ VIDEO_CONTENT_TYPES = {"video/mp4", "video/webm"}
 IMAGE_MAX_BYTES = 5 * 1024 * 1024
 GIF_MAX_BYTES = 8 * 1024 * 1024
 VIDEO_MAX_BYTES = 20 * 1024 * 1024
+PRIMARY_ITEM_TYPES = {
+    ItemType.NEW_FEATURE,
+    ItemType.PRODUCT_IMPROVEMENT,
+    ItemType.CLIENT_CUSTOMIZATION,
+    ItemType.INTERNAL_CHANGE,
+    ItemType.TECHNICAL_IMPROVEMENT,
+    ItemType.BUGFIX,
+    ItemType.CHANGE,
+}
 
 
 @app.on_event("startup")
@@ -414,11 +423,13 @@ def update_review_item(
             effective_status = ItemStatus.APPROVED.value
             effective_category = None
             effective_description = ""
-    elif item.type in {ItemType.NEW_FEATURE, ItemType.CHANGE}:
-        if item_type in {item_type.value for item_type in ItemType}:
+    elif item.type in PRIMARY_ITEM_TYPES:
+        if item_type in {primary_type.value for primary_type in PRIMARY_ITEM_TYPES}:
             effective_type = ItemType(item_type)
 
-    if digest_visibility in {visibility.value for visibility in DigestVisibility}:
+    if digest_visibility:
+        if digest_visibility not in {visibility.value for visibility in DigestVisibility}:
+            return _bad_request_response(request, "Invalid digest_visibility value.")
         effective_visibility = DigestVisibility(digest_visibility)
 
     try:
@@ -820,6 +831,15 @@ def _stale_object_response(message: str) -> Response:
         {"ok": False, "message": message, "detail": message},
         status_code=409,
     )
+
+
+def _bad_request_response(request: Request, message: str) -> Response:
+    if _wants_json(request):
+        return JSONResponse(
+            {"ok": False, "message": message, "detail": message},
+            status_code=400,
+        )
+    raise HTTPException(status_code=400, detail=message)
 
 
 def _published_release_response(request: Request, release_id: str) -> Response:

@@ -1293,6 +1293,64 @@ class DigestGuardTests(unittest.TestCase):
         payload = response.json()
         self.assertEqual(payload["item_type"], "client_customization")
         self.assertEqual(payload["digest_visibility"], "internal")
+        updated_item = self.storage.get_item("feature")
+        self.assertEqual(updated_item.digest_visibility, DigestVisibility.INTERNAL)
+        self.assertEqual(updated_item.type, ItemType.CLIENT_CUSTOMIZATION)
+
+    def test_review_item_rejects_invalid_digest_visibility(self) -> None:
+        from app.models import DigestItem, DigestVisibility, ItemStatus, ItemType
+        from app.storage import replace_release_items
+
+        replace_release_items("2026-04", [
+            DigestItem(
+                id="feature",
+                release_id="2026-04",
+                source_item_ids=["DEV-1"],
+                title="Feature",
+                description="Feature text",
+                module="Ядро",
+                type=ItemType.NEW_FEATURE,
+                digest_visibility=DigestVisibility.PUBLIC,
+                category=None,
+                status=ItemStatus.DRAFT,
+            )
+        ])
+
+        response = self.client.post(
+            "/review/2026-04/items/feature",
+            data={
+                "title": "Feature changed",
+                "description": "Feature changed",
+                "item_type": "client_customization",
+                "digest_visibility": "private",
+                "status": "approved",
+            },
+            headers={"Accept": "application/json"},
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("digest_visibility", response.json()["detail"])
+        updated_item = self.storage.get_item("feature")
+        self.assertEqual(updated_item.digest_visibility, DigestVisibility.PUBLIC)
+        self.assertEqual(updated_item.type, ItemType.NEW_FEATURE)
+        self.assertEqual(updated_item.title, "Feature")
+
+    def test_review_item_cannot_change_primary_item_to_release_candidate(self) -> None:
+        response = self.client.post(
+            "/review/2026-04/items/item-1",
+            data={
+                "title": "Feature title",
+                "description": "Feature description",
+                "category": "",
+                "status": "draft",
+                "item_type": "release_candidate",
+            },
+            headers={"Accept": "application/json"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["item_type"], ItemType.NEW_FEATURE.value)
+        self.assertEqual(self.storage.get_item("item-1").type, ItemType.NEW_FEATURE)
 
     def test_bulk_exclude_items(self) -> None:
         response = self.client.post(
