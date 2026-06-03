@@ -9,7 +9,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 from fastapi.responses import Response
 
-from app.models import DigestItem, DigestRelease, GroupingMode, ItemStatus, ItemType, PublicationStatus, SourceItem, SummaryStatus, ValueCategory
+from app.models import DigestItem, DigestRelease, DigestVisibility, GroupingMode, ItemStatus, ItemType, PublicationStatus, SourceItem, SummaryStatus, ValueCategory
 from app.session import SESSION_COOKIE_NAME, save_session
 
 
@@ -275,6 +275,7 @@ class DigestGuardTests(unittest.TestCase):
                     description="Feature description",
                     module="Core",
                     type=ItemType.NEW_FEATURE,
+                    digest_visibility=DigestVisibility.PUBLIC,
                     category=None,
                     status=ItemStatus.DRAFT,
                     tracker_urls=["https://tracker.yandex.ru/DEV-1"],
@@ -461,11 +462,12 @@ class DigestGuardTests(unittest.TestCase):
         from app.services.publication import build_live_digest_content
 
         items = [
-            DigestItem(id="feature", release_id="2026-04", source_item_ids=[], title="Feature", description="Feature text", module="Подбор", type=ItemType.NEW_FEATURE, category=None, status=ItemStatus.APPROVED),
-            DigestItem(id="change", release_id="2026-04", source_item_ids=[], title="Change", description="Change text", module="Интеграции", type=ItemType.CHANGE, category=None, status=ItemStatus.APPROVED),
-            DigestItem(id="tech", release_id="2026-04", source_item_ids=[], title="Tech", description="", module="Платформа", type=ItemType.TECHNICAL_IMPROVEMENT, category=None, status=ItemStatus.APPROVED),
-            DigestItem(id="bug", release_id="2026-04", source_item_ids=[], title="Bug", description="", module="Ядро", type=ItemType.BUGFIX, category=None, status=ItemStatus.APPROVED),
-            DigestItem(id="draft", release_id="2026-04", source_item_ids=[], title="Draft", description="", module="Ядро", type=ItemType.NEW_FEATURE, category=None, status=ItemStatus.DRAFT),
+            DigestItem(id="feature", release_id="2026-04", source_item_ids=[], title="Feature", description="Feature text", module="Подбор", type=ItemType.NEW_FEATURE, digest_visibility=DigestVisibility.PUBLIC, category=None, status=ItemStatus.APPROVED),
+            DigestItem(id="change", release_id="2026-04", source_item_ids=[], title="Change", description="Change text", module="Интеграции", type=ItemType.PRODUCT_IMPROVEMENT, digest_visibility=DigestVisibility.PUBLIC, category=None, status=ItemStatus.APPROVED),
+            DigestItem(id="client", release_id="2026-04", source_item_ids=[], title="Client", description="Client text", module="AI", type=ItemType.CLIENT_CUSTOMIZATION, digest_visibility=DigestVisibility.PUBLIC, category=None, status=ItemStatus.APPROVED),
+            DigestItem(id="bug", release_id="2026-04", source_item_ids=[], title="Bug", description="", module="Ядро", type=ItemType.BUGFIX, digest_visibility=DigestVisibility.PUBLIC, category=None, status=ItemStatus.APPROVED),
+            DigestItem(id="internal-feature", release_id="2026-04", source_item_ids=[], title="Hidden feature", description="", module="Ядро", type=ItemType.NEW_FEATURE, digest_visibility=DigestVisibility.INTERNAL, category=None, status=ItemStatus.APPROVED),
+            DigestItem(id="draft", release_id="2026-04", source_item_ids=[], title="Draft", description="", module="Ядро", type=ItemType.NEW_FEATURE, digest_visibility=DigestVisibility.PUBLIC, category=None, status=ItemStatus.DRAFT),
         ]
 
         content = build_live_digest_content(items)
@@ -475,14 +477,19 @@ class DigestGuardTests(unittest.TestCase):
             {
                 "items_count": 4,
                 "new_features_count": 1,
-                "changes_count": 1,
-                "technical_count": 2,
-                "product_items_count": 2,
+                "changes_count": 2,
+                "technical_count": 0,
+                "product_items_count": 4,
             },
         )
-        support = next(section for section in content["sections"] if section["id"] == "support")
-        self.assertEqual(support["title"], "Стабильность и техническая база")
-        self.assertEqual(support["items_count"], 2)
+        improvements = next(section for section in content["sections"] if section["id"] == "improvements")
+        self.assertEqual(improvements["title"], "Что улучшили")
+        self.assertEqual(improvements["items_count"], 2)
+        client_scenarios = next(section for section in content["sections"] if section["id"] == "client_scenarios")
+        self.assertEqual(client_scenarios["title"], "Клиентские сценарии")
+        self.assertEqual(client_scenarios["items_count"], 1)
+        titles = [item["title"] for section in content["sections"] for item in section["items"]]
+        self.assertNotIn("Hidden feature", titles)
 
     def test_item_payload_includes_module_icon_key(self) -> None:
         from app.services.publication import build_live_digest_content
@@ -495,6 +502,7 @@ class DigestGuardTests(unittest.TestCase):
             description="Integration text",
             module="Интеграции",
             type=ItemType.NEW_FEATURE,
+            digest_visibility=DigestVisibility.PUBLIC,
             category=None,
             status=ItemStatus.APPROVED,
         )
@@ -845,6 +853,7 @@ class DigestGuardTests(unittest.TestCase):
             description="Paid feature text",
             module="Интеграции",
             type=ItemType.NEW_FEATURE,
+            digest_visibility=DigestVisibility.PUBLIC,
             category=ValueCategory.TIME_SAVING,
             status=ItemStatus.APPROVED,
             is_paid_feature=True,
@@ -941,6 +950,7 @@ class DigestGuardTests(unittest.TestCase):
                     description="Client-facing feature text",
                     module="Подбор",
                     type=ItemType.NEW_FEATURE,
+                    digest_visibility=DigestVisibility.PUBLIC,
                     category=ValueCategory.TIME_SAVING,
                     status=ItemStatus.APPROVED,
                     tracker_urls=["https://tracker.yandex.ru/DEV-10"],
@@ -954,6 +964,7 @@ class DigestGuardTests(unittest.TestCase):
                     description="Client-facing change text",
                     module="Отчеты",
                     type=ItemType.CHANGE,
+                    digest_visibility=DigestVisibility.PUBLIC,
                     category=ValueCategory.CLARITY_TRANSPARENCY,
                     status=ItemStatus.APPROVED,
                     tracker_urls=["https://tracker.yandex.ru/DEV-11"],
@@ -967,6 +978,7 @@ class DigestGuardTests(unittest.TestCase):
                     description="Hidden text",
                     module="Подбор",
                     type=ItemType.NEW_FEATURE,
+                    digest_visibility=DigestVisibility.PUBLIC,
                     category=ValueCategory.TIME_SAVING,
                     status=ItemStatus.EXCLUDED,
                     tracker_urls=["https://tracker.yandex.ru/DEV-12"],
@@ -980,6 +992,7 @@ class DigestGuardTests(unittest.TestCase):
                     description="",
                     module="Интеграции",
                     type=ItemType.BUGFIX,
+                    digest_visibility=DigestVisibility.PUBLIC,
                     category=None,
                     status=ItemStatus.APPROVED,
                     tracker_urls=["https://tracker.yandex.ru/DEV-13"],
@@ -993,8 +1006,7 @@ class DigestGuardTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn("Что нового", response.text)
-        self.assertIn("Что стало удобнее", response.text)
-        self.assertIn("Стабильность и техническая база", response.text)
+        self.assertIn("Что улучшили", response.text)
         self.assertIn("Approved feature", response.text)
         self.assertIn("Approved change", response.text)
         self.assertIn("Approved fix", response.text)
@@ -1012,6 +1024,7 @@ class DigestGuardTests(unittest.TestCase):
                     description="Teams can understand progress faster.",
                     module="Аналитика",
                     type=ItemType.NEW_FEATURE,
+                    digest_visibility=DigestVisibility.PUBLIC,
                     category=ValueCategory.CLARITY_TRANSPARENCY,
                     status=ItemStatus.APPROVED,
                     tracker_urls=["https://tracker.yandex.ru/DEV-20"],
@@ -1025,6 +1038,7 @@ class DigestGuardTests(unittest.TestCase):
                     description="",
                     module="Экспорт",
                     type=ItemType.BUGFIX,
+                    digest_visibility=DigestVisibility.PUBLIC,
                     category=None,
                     status=ItemStatus.APPROVED,
                     tracker_urls=["https://tracker.yandex.ru/DEV-21"],
@@ -1039,7 +1053,8 @@ class DigestGuardTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("New analytics", response.text)
         self.assertNotIn("https://tracker.yandex.ru/DEV-20", response.text)
-        self.assertIn("https://tracker.yandex.ru/DEV-21", response.text)
+        self.assertIn("Fixed export", response.text)
+        self.assertNotIn("https://tracker.yandex.ru/DEV-21", response.text)
 
     def test_digest_renders_value_badge_and_paid_feature_badge(self) -> None:
         self.storage.update_item(
@@ -1058,7 +1073,7 @@ class DigestGuardTests(unittest.TestCase):
         self.assertIn("Экономия времени", response.text)
         self.assertIn("Платная функция", response.text)
 
-    def test_digest_support_section_is_collapsed_by_default(self) -> None:
+    def test_public_fix_renders_as_improvement_without_support_section(self) -> None:
         self.storage.replace_release_items(
             "2026-04",
             [
@@ -1070,6 +1085,7 @@ class DigestGuardTests(unittest.TestCase):
                     description="",
                     module="Уведомления",
                     type=ItemType.BUGFIX,
+                    digest_visibility=DigestVisibility.PUBLIC,
                     category=None,
                     status=ItemStatus.APPROVED,
                     tracker_urls=["https://tracker.yandex.ru/DEV-30"],
@@ -1082,9 +1098,9 @@ class DigestGuardTests(unittest.TestCase):
         response = self.client.get("/review/2026-04/digest-preview")
 
         self.assertEqual(response.status_code, 200)
-        self.assertIn("<details", response.text)
-        self.assertIn("Стабильность и техническая база", response.text)
-        self.assertNotIn("<details open", response.text)
+        self.assertIn("Что улучшили", response.text)
+        self.assertIn("Fixed notification", response.text)
+        self.assertNotIn("Стабильность и техническая база", response.text)
 
     def test_digest_omits_empty_publication_sections(self) -> None:
         self.storage.replace_release_items(
@@ -1098,6 +1114,7 @@ class DigestGuardTests(unittest.TestCase):
                     description="",
                     module="Напоминания",
                     type=ItemType.BUGFIX,
+                    digest_visibility=DigestVisibility.PUBLIC,
                     category=None,
                     status=ItemStatus.APPROVED,
                     tracker_urls=["https://tracker.yandex.ru/DEV-40"],
@@ -1114,7 +1131,7 @@ class DigestGuardTests(unittest.TestCase):
         self.assertNotIn("Нет изменений", response.text)
         self.assertNotIn('id="new-features-heading"', response.text)
         self.assertNotIn('id="changes-heading"', response.text)
-        self.assertIn("Стабильность и техническая база", response.text)
+        self.assertIn("Что улучшили", response.text)
 
     def test_item_save_supports_ajax_without_redirect(self) -> None:
         item = self.storage.get_item("item-1")

@@ -2,7 +2,7 @@ from pathlib import Path
 import shutil
 from typing import Iterable, Optional
 
-from app.models import DigestItem, DigestRelease, ItemStatus, ItemType, PublishedDigest
+from app.models import DigestItem, DigestRelease, DigestVisibility, ItemStatus, ItemType, PublishedDigest
 from app.review_utils import CLIENT_CATEGORY_LABELS, is_video_media_path
 from app.storage import _now_text
 
@@ -12,13 +12,24 @@ class PublicationError(Exception):
 
 
 def build_live_digest_content(items: Iterable[DigestItem]) -> dict:
-    approved_items = [
+    approved_public_items = [
         item for item in items
-        if item.status == ItemStatus.APPROVED and item.type != ItemType.RELEASE_CANDIDATE
+        if item.status == ItemStatus.APPROVED
+        and item.type != ItemType.RELEASE_CANDIDATE
+        and item.digest_visibility == DigestVisibility.PUBLIC
     ]
-    new_feature_items = [item for item in approved_items if item.type == ItemType.NEW_FEATURE]
-    change_items = [item for item in approved_items if item.type == ItemType.CHANGE]
-    support_items = [item for item in approved_items if item.type in {ItemType.BUGFIX, ItemType.TECHNICAL_IMPROVEMENT}]
+    new_feature_items = [item for item in approved_public_items if item.type == ItemType.NEW_FEATURE]
+    improvement_items = [
+        item for item in approved_public_items
+        if item.type in {
+            ItemType.CHANGE,
+            ItemType.PRODUCT_IMPROVEMENT,
+            ItemType.INTERNAL_CHANGE,
+            ItemType.BUGFIX,
+            ItemType.TECHNICAL_IMPROVEMENT,
+        }
+    ]
+    client_items = [item for item in approved_public_items if item.type == ItemType.CLIENT_CUSTOMIZATION]
     sections = [
         _section(
             "new_features",
@@ -27,28 +38,27 @@ def build_live_digest_content(items: Iterable[DigestItem]) -> dict:
             include_tracker=False,
         ),
         _section(
-            "changes",
-            "Что стало удобнее",
-            change_items,
+            "improvements",
+            "Что улучшили",
+            improvement_items,
             include_tracker=False,
         ),
         _section(
-            "support",
-            "Стабильность и техническая база",
-            support_items,
-            include_tracker=True,
-            collapsed=True,
+            "client_scenarios",
+            "Клиентские сценарии",
+            client_items,
+            include_tracker=False,
         ),
     ]
     visible_sections = [section for section in sections if section["items"]]
     return {
         "sections": visible_sections,
         "metrics": {
-            "items_count": len(approved_items),
+            "items_count": len(approved_public_items),
             "new_features_count": len(new_feature_items),
-            "changes_count": len(change_items),
-            "technical_count": len(support_items),
-            "product_items_count": len(new_feature_items) + len(change_items),
+            "changes_count": len(improvement_items),
+            "technical_count": 0,
+            "product_items_count": len(new_feature_items) + len(improvement_items) + len(client_items),
         },
     }
 
@@ -86,11 +96,16 @@ def normalize_published_digest_content(content: dict) -> dict:
     }
     metrics.setdefault("items_count", sum(section_counts.values()))
     metrics.setdefault("new_features_count", section_counts.get("new_features", 0))
-    metrics.setdefault("changes_count", section_counts.get("changes", 0))
+    metrics.setdefault(
+        "changes_count",
+        section_counts.get("improvements", section_counts.get("changes", 0)),
+    )
     metrics.setdefault("technical_count", section_counts.get("support", 0))
     metrics.setdefault(
         "product_items_count",
-        section_counts.get("new_features", 0) + section_counts.get("changes", 0),
+        section_counts.get("new_features", 0)
+        + section_counts.get("improvements", section_counts.get("changes", 0))
+        + section_counts.get("client_scenarios", 0),
     )
     return {"sections": sections, "metrics": metrics}
 
@@ -117,6 +132,10 @@ def _normalize_published_section(section: dict) -> dict:
     if section_id == "support":
         normalized_section["title"] = "Стабильность и техническая база"
         normalized_section["collapsed"] = True
+    if section_id == "improvements":
+        normalized_section["title"] = "Что улучшили"
+    if section_id == "client_scenarios":
+        normalized_section["title"] = "Клиентские сценарии"
     return normalized_section
 
 
