@@ -161,7 +161,7 @@ def _classify_tracker_item(item: dict[str, Any]) -> Optional[tuple[ItemType, Dig
     if in_release == "Только внутренний":
         return ItemType.INTERNAL_CHANGE, DigestVisibility.INTERNAL
     if in_release == "Клиентский и внутренний":
-        if "Product Development" in project_primary:
+        if project_primary == "Product Development":
             return ItemType.NEW_FEATURE, DigestVisibility.PUBLIC
         module = _map_module_name(item.get("components") or [])
         if module == "Клиентский запрос":

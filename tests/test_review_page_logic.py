@@ -118,6 +118,20 @@ class ReviewPageLogicTests(unittest.TestCase):
 
         self.assertEqual(result, (ItemType.PRODUCT_IMPROVEMENT, DigestVisibility.PUBLIC))
 
+    def test_tracker_project_matching_requires_exact_product_development(self) -> None:
+        from app.clients.tracker import _classify_tracker_item
+        from app.models import DigestVisibility, ItemType
+
+        result = _classify_tracker_item({
+            "type": {"key": "story"},
+            "tags": [],
+            "inTheReleaseDescription": "Клиентский и внутренний",
+            "project": {"primary": {"display": "Not Product Development"}},
+            "components": [{"display": "ATSCore"}],
+        })
+
+        self.assertEqual(result, (ItemType.PRODUCT_IMPROVEMENT, DigestVisibility.PUBLIC))
+
     def test_client_value_category_labels_are_human_readable(self) -> None:
         from app.models import ValueCategory
         from app.review_utils import CLIENT_CATEGORY_LABELS
