@@ -88,6 +88,8 @@ def _preserve_review_state_when_content_is_unchanged(
             continue
         if _reviewed_item_content_matches(existing_item, item):
             item.status = existing_item.status
+            item.type = existing_item.type
+            item.digest_visibility = existing_item.digest_visibility
 
 
 def _can_match_review_item(item) -> bool:
@@ -96,6 +98,7 @@ def _can_match_review_item(item) -> bool:
         for attr in (
             "grouping_mode",
             "type",
+            "digest_visibility",
             "source_item_ids",
             "title",
             "description",
@@ -120,7 +123,6 @@ def _reviewed_item_content_matches(existing_item, item) -> bool:
 def _item_signature(item) -> tuple:
     return (
         item.grouping_mode.value,
-        item.type.value,
         tuple(sorted(item.source_item_ids)),
     )
 

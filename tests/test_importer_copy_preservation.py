@@ -2,6 +2,7 @@ import unittest
 from unittest import mock
 
 from app.models import (
+    DigestVisibility,
     DigestItem,
     DigestRelease,
     GroupingMode,
@@ -143,6 +144,48 @@ class ImporterCopyPreservationTests(unittest.TestCase):
         self.assertEqual(new_release.summary_status, SummaryStatus.APPROVED)
         self.assertEqual(new_item.status, ItemStatus.APPROVED)
 
+    def test_reimport_preserves_manual_type_and_visibility_when_content_unchanged(self) -> None:
+        existing_release = DigestRelease(
+            id="DEV-1",
+            release_date="2026-02-03",
+            summary="Approved summary.",
+            summary_status=SummaryStatus.APPROVED,
+        )
+        new_release = DigestRelease(
+            id="DEV-1",
+            release_date="2026-02-03",
+            summary="Approved summary.",
+            summary_status=SummaryStatus.DRAFT,
+        )
+        existing_item = _build_item(
+            "digest-old",
+            "DEV-101",
+            "Generate vacancy text",
+            "Generate vacancy text faster",
+            item_type=ItemType.CLIENT_CUSTOMIZATION,
+            digest_visibility=DigestVisibility.PUBLIC,
+        )
+        existing_item.status = ItemStatus.APPROVED
+        new_item = _build_item(
+            "digest-new",
+            "DEV-101",
+            "Generate vacancy text",
+            "Generate vacancy text faster",
+            item_type=ItemType.NEW_FEATURE,
+            digest_visibility=DigestVisibility.PUBLIC,
+        )
+
+        _preserve_review_state_when_content_is_unchanged(
+            existing_release,
+            [existing_item],
+            new_release,
+            [new_item],
+        )
+
+        self.assertEqual(new_item.status, ItemStatus.APPROVED)
+        self.assertEqual(new_item.type, ItemType.CLIENT_CUSTOMIZATION)
+        self.assertEqual(new_item.digest_visibility, DigestVisibility.PUBLIC)
+
     def test_review_state_resets_when_imported_content_changes(self) -> None:
         existing_release = DigestRelease(
             id="DEV-1",
@@ -181,7 +224,14 @@ class ImporterCopyPreservationTests(unittest.TestCase):
         self.assertEqual(new_item.status, ItemStatus.DRAFT)
 
 
-def _build_item(item_id: str, source_id: str, title: str, description: str) -> DigestItem:
+def _build_item(
+    item_id: str,
+    source_id: str,
+    title: str,
+    description: str,
+    item_type: ItemType = ItemType.NEW_FEATURE,
+    digest_visibility: DigestVisibility = DigestVisibility.INTERNAL,
+) -> DigestItem:
     return DigestItem(
         id=item_id,
         release_id="DEV-1",
@@ -189,7 +239,8 @@ def _build_item(item_id: str, source_id: str, title: str, description: str) -> D
         title=title,
         description=description,
         module="Ядро",
-        type=ItemType.NEW_FEATURE,
+        type=item_type,
+        digest_visibility=digest_visibility,
         category=ValueCategory.DAILY_WORK_CONVENIENCE,
         status=ItemStatus.DRAFT,
         grouping_mode=GroupingMode.SINGLE_TASK,
