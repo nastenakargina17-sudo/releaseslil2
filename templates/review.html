@@ -908,7 +908,7 @@
       <div class="filters-head">
         <div class="action-copy">
           <strong>Фильтры ревью</strong>
-          <small data-filter-summary>Статус: Черновик; типы: Новый функционал, Продуктовое улучшение; видимость: все варианты</small>
+          <small data-filter-summary>Статус: Черновик</small>
         </div>
         <button type="button" class="button button-subtle" data-filter-toggle>Развернуть фильтры</button>
       </div>
@@ -921,34 +921,6 @@
           <button type="button" class="button button-subtle button-filter is-active" data-filter-value="draft">Черновики</button>
           <button type="button" class="button button-subtle button-filter" data-filter-value="approved">Подтверждено</button>
           <button type="button" class="button button-subtle button-filter" data-filter-value="excluded">Исключено</button>
-        </div>
-        <div class="filter-row" data-type-filter-bar>
-          <span class="filter-label">Тип изменения:</span>
-          {% for item_type in [ItemType.NEW_FEATURE, ItemType.PRODUCT_IMPROVEMENT, ItemType.CLIENT_CUSTOMIZATION, ItemType.INTERNAL_CHANGE, ItemType.TECHNICAL_IMPROVEMENT, ItemType.BUGFIX, ItemType.RELEASE_CANDIDATE] %}
-            <label class="type-filter">
-              <input
-                type="checkbox"
-                value="{{ item_type.value }}"
-                data-type-filter
-                {% if item_type in [ItemType.NEW_FEATURE, ItemType.PRODUCT_IMPROVEMENT] %}checked{% endif %}
-              >
-              {{ item_type_labels[item_type] }}
-            </label>
-          {% endfor %}
-        </div>
-        <div class="filter-row" data-visibility-filter-bar>
-          <span class="filter-label">Видимость:</span>
-          {% for visibility in digest_visibilities %}
-            <label class="type-filter">
-              <input
-                type="checkbox"
-                value="{{ visibility.value }}"
-                data-visibility-filter
-                checked
-              >
-              {{ digest_visibility_labels[visibility] }}
-            </label>
-          {% endfor %}
         </div>
         <div class="bulk-bar">
           <button type="button" class="button button-subtle" data-bulk-mode-toggle>Массово исключить из релиза</button>
@@ -1065,7 +1037,6 @@
                     <input type="checkbox" data-item-select>
                   </label>
                   <span class="item-pill" data-item-type-pill>{{ item_type_labels[display_item_type] }}</span>
-                  <span class="mini-pill" data-digest-visibility-pill>{{ digest_visibility_labels[item.digest_visibility] }}</span>
                   <span class="mini-pill">Модуль: {{ item.module }}</span>
                   {% if item.is_paid_feature %}
                     <span class="mini-pill">Платная фича</span>
@@ -1138,25 +1109,6 @@
                   <label for="title-{{ item.id }}">Заголовок</label>
                   <input type="text" name="title" id="title-{{ item.id }}" value="{{ item.title }}">
                   <div class="helper-text">Оставляем только бизнес-смысл без префиксов задачи, кодов и внутренней нумерации.</div>
-                </div>
-
-                <div class="field-row">
-                  <div class="field-group">
-                    <label for="item_type-{{ item.id }}">Тип изменения</label>
-                    <select name="item_type" id="item_type-{{ item.id }}" data-item-type-select>
-                      {% for option_type in [ItemType.NEW_FEATURE, ItemType.PRODUCT_IMPROVEMENT, ItemType.CLIENT_CUSTOMIZATION, ItemType.INTERNAL_CHANGE, ItemType.TECHNICAL_IMPROVEMENT, ItemType.BUGFIX] %}
-                        <option value="{{ option_type.value }}" {% if display_item_type == option_type %}selected{% endif %}>{{ item_type_labels[option_type] }}</option>
-                      {% endfor %}
-                    </select>
-                  </div>
-                  <div class="field-group">
-                    <label for="digest_visibility-{{ item.id }}">Видимость</label>
-                    <select name="digest_visibility" id="digest_visibility-{{ item.id }}" data-digest-visibility-select>
-                      {% for visibility in digest_visibilities %}
-                        <option value="{{ visibility.value }}" {% if item.digest_visibility == visibility %}selected{% endif %}>{{ digest_visibility_labels[visibility] }}</option>
-                      {% endfor %}
-                    </select>
-                  </div>
                 </div>
 
                 {% if not is_descriptionless %}
@@ -1408,8 +1360,6 @@
       const filterToggle = document.querySelector("[data-filter-toggle]");
       const filterSummary = document.querySelector("[data-filter-summary]");
       const filterButtons = Array.from(document.querySelectorAll("[data-filter-value]"));
-      const typeFilters = Array.from(document.querySelectorAll("[data-type-filter]"));
-      const visibilityFilters = Array.from(document.querySelectorAll("[data-visibility-filter]"));
       const itemCards = Array.from(document.querySelectorAll("[data-item-card]"));
       const reviewForms = Array.from(document.querySelectorAll("[data-review-form]"));
       const selectionCount = document.querySelector("[data-selection-count]");
@@ -1466,14 +1416,6 @@
       };
 
       const activeFilter = () => document.querySelector(".button-filter.is-active")?.dataset.filterValue || "all";
-      const selectedTypeValues = () => typeFilters.filter((input) => input.checked).map((input) => input.value);
-      const selectedTypeLabels = () => typeFilters
-        .filter((input) => input.checked)
-        .map((input) => input.closest(".type-filter")?.textContent.trim() || input.value);
-      const selectedVisibilityValues = () => visibilityFilters.filter((input) => input.checked).map((input) => input.value);
-      const selectedVisibilityLabels = () => visibilityFilters
-        .filter((input) => input.checked)
-        .map((input) => input.closest(".type-filter")?.textContent.trim() || input.value);
 
       const updateFilterSummary = () => {
         if (!filterSummary) {
@@ -1481,9 +1423,7 @@
         }
         const statusButton = document.querySelector(".button-filter.is-active");
         const statusLabel = statusButton?.textContent.trim() || "Все пункты";
-        const typeLabel = selectedTypeLabels().join(", ") || "все типы";
-        const visibilityLabel = selectedVisibilityLabels().join(", ") || "все варианты";
-        filterSummary.textContent = `Статус: ${statusLabel}; типы: ${typeLabel}; видимость: ${visibilityLabel}`;
+        filterSummary.textContent = `Статус: ${statusLabel}`;
       };
 
       const selectedItemCards = () => itemCards.filter((card) => card.querySelector("[data-item-select]")?.checked);
@@ -1527,8 +1467,6 @@
 
       const applyFilter = () => {
         const currentFilter = activeFilter();
-        const activeTypes = selectedTypeValues();
-        const activeVisibilities = selectedVisibilityValues();
         if (summaryCard) {
           const summaryStatus = summaryCard.dataset.summaryStatus || "";
           summaryCard.hidden = !(
@@ -1542,15 +1480,12 @@
           const status = getCardStatus(card);
           const bucket = card.dataset.itemBucket || "primary";
           const itemType = card.dataset.itemType || "";
-          const digestVisibility = card.dataset.digestVisibility || "";
           const matchesStatus =
             currentFilter === "all"
             || (currentFilter === "release_candidate" && itemType === "release_candidate")
             || (currentFilter === "needs_review" && status !== "{{ approved_status }}" && status !== "{{ excluded_status }}")
             || (bucket === "primary" && currentFilter === status);
-          const matchesType = activeTypes.length === 0 || activeTypes.includes(itemType);
-          const matchesVisibility = bucket !== "primary" || activeVisibilities.length === 0 || activeVisibilities.includes(digestVisibility);
-          const shouldShow = card.classList.contains("is-dirty") || (matchesStatus && matchesType && matchesVisibility);
+          const shouldShow = card.classList.contains("is-dirty") || matchesStatus;
           card.hidden = !shouldShow;
         });
         updateFilterSummary();
@@ -2032,19 +1967,9 @@
             const card = form.closest("[data-item-card]");
             if (card && payload.item_type) {
               card.dataset.itemType = payload.item_type;
-              const typePill = card.querySelector("[data-item-type-pill]");
-              const typeSelect = form.querySelector("[data-item-type-select]");
-              if (typePill && typeSelect) {
-                typePill.textContent = typeSelect.options[typeSelect.selectedIndex]?.textContent || typePill.textContent;
-              }
             }
             if (card && payload.digest_visibility) {
               card.dataset.digestVisibility = payload.digest_visibility;
-              const visibilityPill = card.querySelector("[data-digest-visibility-pill]");
-              const visibilitySelect = form.querySelector("[data-digest-visibility-select]");
-              if (visibilityPill && visibilitySelect) {
-                visibilityPill.textContent = visibilitySelect.options[visibilitySelect.selectedIndex]?.textContent || visibilityPill.textContent;
-              }
             }
             const versionInput = form.querySelector("[data-object-version]");
             if (versionInput && payload.version) {
@@ -2158,14 +2083,6 @@
           button.classList.add("is-active");
           applyFilter();
         });
-      });
-
-      typeFilters.forEach((input) => {
-        input.addEventListener("change", applyFilter);
-      });
-
-      visibilityFilters.forEach((input) => {
-        input.addEventListener("change", applyFilter);
       });
 
       filterToggle?.addEventListener("click", () => {
