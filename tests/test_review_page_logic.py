@@ -1369,7 +1369,7 @@ class DigestGuardTests(unittest.TestCase):
         self.assertEqual(updated_item.digest_visibility, DigestVisibility.INTERNAL)
         self.assertEqual(updated_item.type, ItemType.CLIENT_CUSTOMIZATION)
 
-    def test_review_page_hides_taxonomy_controls_but_keeps_metadata(self) -> None:
+    def test_review_page_shows_type_and_visibility_for_described_items(self) -> None:
         from app.models import DigestItem, DigestVisibility, ItemStatus, ItemType
         from app.storage import replace_release_items
 
@@ -1391,12 +1391,16 @@ class DigestGuardTests(unittest.TestCase):
         response = self.client.get("/review/2026-04")
 
         self.assertEqual(response.status_code, 200)
+        self.assertIn("Тип изменения", response.text)
         self.assertIn("Клиентская доработка", response.text)
+        self.assertIn("Видимость", response.text)
+        self.assertIn("Внутренний обзор", response.text)
         self.assertIn('data-item-type="client_customization"', response.text)
         self.assertIn('data-digest-visibility="internal"', response.text)
-        self.assertNotIn('for="item_type-client-flow"', response.text)
-        self.assertNotIn('for="digest_visibility-client-flow"', response.text)
+        self.assertIn('for="item_type-client-flow"', response.text)
+        self.assertIn('for="digest_visibility-client-flow"', response.text)
         self.assertNotIn('data-visibility-filter', response.text)
+        self.assertNotIn('data-type-filter', response.text)
 
     def test_review_page_treats_legacy_change_as_product_improvement(self) -> None:
         from app.models import DigestItem, DigestVisibility, ItemStatus, ItemType
@@ -1422,7 +1426,7 @@ class DigestGuardTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn('data-item-type="product_improvement"', response.text)
         self.assertIn("Продуктовое улучшение", response.text)
-        self.assertNotIn('for="item_type-legacy-change"', response.text)
+        self.assertIn('<option value="product_improvement" selected>Продуктовое улучшение</option>', response.text)
 
     def test_review_item_rejects_invalid_digest_visibility(self) -> None:
         from app.models import DigestItem, DigestVisibility, ItemStatus, ItemType

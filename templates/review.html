@@ -1112,6 +1112,24 @@
                 </div>
 
                 {% if not is_descriptionless %}
+                  <div class="field-row">
+                    <div class="field-group">
+                      <label for="item_type-{{ item.id }}">Тип изменения</label>
+                      <select name="item_type" id="item_type-{{ item.id }}" data-item-type-select>
+                        {% for option_type in [ItemType.NEW_FEATURE, ItemType.PRODUCT_IMPROVEMENT, ItemType.CLIENT_CUSTOMIZATION, ItemType.INTERNAL_CHANGE] %}
+                          <option value="{{ option_type.value }}" {% if display_item_type == option_type %}selected{% endif %}>{{ item_type_labels[option_type] }}</option>
+                        {% endfor %}
+                      </select>
+                    </div>
+                    <div class="field-group">
+                      <label for="digest_visibility-{{ item.id }}">Видимость</label>
+                      <select name="digest_visibility" id="digest_visibility-{{ item.id }}" data-digest-visibility-select>
+                        {% for visibility in digest_visibilities %}
+                          <option value="{{ visibility.value }}" {% if item.digest_visibility == visibility %}selected{% endif %}>{{ digest_visibility_labels[visibility] }}</option>
+                        {% endfor %}
+                      </select>
+                    </div>
+                  </div>
                   <div class="field-group">
                     <label for="description-{{ item.id }}">Описание</label>
                     <textarea name="description" id="description-{{ item.id }}">{{ item.description }}</textarea>
@@ -1967,6 +1985,11 @@
             const card = form.closest("[data-item-card]");
             if (card && payload.item_type) {
               card.dataset.itemType = payload.item_type;
+              const typePill = card.querySelector("[data-item-type-pill]");
+              const typeSelect = form.querySelector("[data-item-type-select]");
+              if (typePill && typeSelect) {
+                typePill.textContent = typeSelect.options[typeSelect.selectedIndex]?.textContent || typePill.textContent;
+              }
             }
             if (card && payload.digest_visibility) {
               card.dataset.digestVisibility = payload.digest_visibility;
