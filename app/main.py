@@ -116,6 +116,12 @@ PRIMARY_ITEM_TYPES = {
     ItemType.BUGFIX,
     ItemType.CHANGE,
 }
+REVIEW_ITEM_TYPES = {
+    ItemType.TECHNICAL_IMPROVEMENT,
+    ItemType.BUGFIX,
+    ItemType.INTERNAL_CHANGE,
+    ItemType.PRODUCT_IMPROVEMENT,
+}
 
 
 @app.on_event("startup")
@@ -416,7 +422,7 @@ def update_review_item(
     moved_to_primary = False
 
     if item.type == ItemType.RELEASE_CANDIDATE:
-        if release_candidate_action in {ItemType.NEW_FEATURE.value, ItemType.CHANGE.value}:
+        if release_candidate_action in {item_type.value for item_type in REVIEW_ITEM_TYPES}:
             effective_type = ItemType(release_candidate_action)
             effective_status = ItemStatus.DRAFT.value
             effective_category = default_item_category(effective_type).value if default_item_category(effective_type) else None
@@ -427,7 +433,7 @@ def update_review_item(
             effective_category = None
             effective_description = ""
     elif item.type in PRIMARY_ITEM_TYPES:
-        if item_type in {primary_type.value for primary_type in PRIMARY_ITEM_TYPES}:
+        if item_type in {review_type.value for review_type in REVIEW_ITEM_TYPES}:
             effective_type = ItemType(item_type)
 
     if digest_visibility:

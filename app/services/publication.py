@@ -2,7 +2,7 @@ from pathlib import Path
 import shutil
 from typing import Iterable, Optional
 
-from app.models import DigestItem, DigestRelease, DigestVisibility, ItemStatus, ItemType, PublishedDigest
+from app.models import DigestItem, DigestRelease, ItemStatus, ItemType, PublishedDigest
 from app.review_utils import CLIENT_CATEGORY_LABELS, is_video_media_path
 from app.storage import _now_text
 
@@ -12,15 +12,14 @@ class PublicationError(Exception):
 
 
 def build_live_digest_content(items: Iterable[DigestItem]) -> dict:
-    approved_public_items = [
+    approved_items = [
         item for item in items
         if item.status == ItemStatus.APPROVED
         and item.type != ItemType.RELEASE_CANDIDATE
-        and item.digest_visibility == DigestVisibility.PUBLIC
     ]
-    new_feature_items = [item for item in approved_public_items if item.type == ItemType.NEW_FEATURE]
+    new_feature_items = [item for item in approved_items if item.type == ItemType.NEW_FEATURE]
     improvement_items = [
-        item for item in approved_public_items
+        item for item in approved_items
         if item.type in {
             ItemType.CHANGE,
             ItemType.PRODUCT_IMPROVEMENT,
@@ -29,7 +28,7 @@ def build_live_digest_content(items: Iterable[DigestItem]) -> dict:
             ItemType.TECHNICAL_IMPROVEMENT,
         }
     ]
-    client_items = [item for item in approved_public_items if item.type == ItemType.CLIENT_CUSTOMIZATION]
+    client_items = [item for item in approved_items if item.type == ItemType.CLIENT_CUSTOMIZATION]
     sections = [
         _section(
             "new_features",
@@ -54,7 +53,7 @@ def build_live_digest_content(items: Iterable[DigestItem]) -> dict:
     return {
         "sections": visible_sections,
         "metrics": {
-            "items_count": len(approved_public_items),
+            "items_count": len(approved_items),
             "new_features_count": len(new_feature_items),
             "changes_count": len(improvement_items),
             "technical_count": 0,

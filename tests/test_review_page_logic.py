@@ -471,7 +471,7 @@ class DigestGuardTests(unittest.TestCase):
                 uploads_dir=self.config.UPLOADS_DIR,
             )
 
-    def test_live_digest_metrics_count_release_categories(self) -> None:
+    def test_live_digest_metrics_count_release_categories_without_visibility_split(self) -> None:
         from app.services.publication import build_live_digest_content
 
         items = [
@@ -488,11 +488,11 @@ class DigestGuardTests(unittest.TestCase):
         self.assertEqual(
             content["metrics"],
             {
-                "items_count": 4,
-                "new_features_count": 1,
+                "items_count": 5,
+                "new_features_count": 2,
                 "changes_count": 2,
                 "technical_count": 0,
-                "product_items_count": 4,
+                "product_items_count": 5,
             },
         )
         improvements = next(section for section in content["sections"] if section["id"] == "improvements")
@@ -502,7 +502,7 @@ class DigestGuardTests(unittest.TestCase):
         self.assertEqual(client_scenarios["title"], "Клиентские сценарии")
         self.assertEqual(client_scenarios["items_count"], 1)
         titles = [item["title"] for section in content["sections"] for item in section["items"]]
-        self.assertNotIn("Hidden feature", titles)
+        self.assertIn("Hidden feature", titles)
 
     def test_item_payload_includes_module_icon_key(self) -> None:
         from app.services.publication import build_live_digest_content
@@ -1299,7 +1299,7 @@ class DigestGuardTests(unittest.TestCase):
                 "description": "",
                 "category": "",
                 "status": "approved",
-                "release_candidate_action": "change",
+                "release_candidate_action": "product_improvement",
             },
             headers={"X-Requested-With": "XMLHttpRequest"},
         )
@@ -1307,11 +1307,11 @@ class DigestGuardTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["reload"], True)
         item = self.storage.get_item("item-2")
-        self.assertEqual(item.type, ItemType.CHANGE)
+        self.assertEqual(item.type, ItemType.PRODUCT_IMPROVEMENT)
         self.assertEqual(item.status, ItemStatus.DRAFT)
         self.assertEqual(item.description, "")
 
-    def test_item_type_can_change_between_feature_and_change(self) -> None:
+    def test_item_type_can_change_to_supported_review_type(self) -> None:
         item = self.storage.get_item("item-1")
         response = self.client.post(
             "/review/2026-04/items/item-1",
@@ -1320,17 +1320,17 @@ class DigestGuardTests(unittest.TestCase):
                 "description": "Feature description",
                 "category": "",
                 "status": "draft",
-                "item_type": "change",
+                "item_type": "product_improvement",
                 "object_version": str(item.version),
             },
             headers={"X-Requested-With": "XMLHttpRequest"},
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["item_type"], ItemType.CHANGE.value)
-        self.assertEqual(self.storage.get_item("item-1").type, ItemType.CHANGE)
+        self.assertEqual(response.json()["item_type"], ItemType.PRODUCT_IMPROVEMENT.value)
+        self.assertEqual(self.storage.get_item("item-1").type, ItemType.PRODUCT_IMPROVEMENT)
 
-    def test_review_item_can_update_type_and_visibility(self) -> None:
+    def test_review_item_can_update_to_supported_review_type(self) -> None:
         from app.models import DigestItem, DigestVisibility, ItemStatus, ItemType
         from app.storage import replace_release_items
 
@@ -1354,8 +1354,7 @@ class DigestGuardTests(unittest.TestCase):
             data={
                 "title": "Feature",
                 "description": "Feature text",
-                "item_type": "client_customization",
-                "digest_visibility": "internal",
+                "item_type": "internal_change",
                 "status": "approved",
             },
             headers={"Accept": "application/json"},
@@ -1363,13 +1362,12 @@ class DigestGuardTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()
-        self.assertEqual(payload["item_type"], "client_customization")
-        self.assertEqual(payload["digest_visibility"], "internal")
+        self.assertEqual(payload["item_type"], "internal_change")
         updated_item = self.storage.get_item("feature")
-        self.assertEqual(updated_item.digest_visibility, DigestVisibility.INTERNAL)
-        self.assertEqual(updated_item.type, ItemType.CLIENT_CUSTOMIZATION)
+        self.assertEqual(updated_item.digest_visibility, DigestVisibility.PUBLIC)
+        self.assertEqual(updated_item.type, ItemType.INTERNAL_CHANGE)
 
-    def test_review_page_shows_type_and_visibility_for_described_items(self) -> None:
+    def test_review_page_shows_limited_type_filters_and_no_visibility_controls(self) -> None:
         from app.models import DigestItem, DigestVisibility, ItemStatus, ItemType
         from app.storage import replace_release_items
 
@@ -1392,15 +1390,19 @@ class DigestGuardTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn("Тип изменения", response.text)
-        self.assertIn("Клиентская доработка", response.text)
-        self.assertIn("Видимость", response.text)
-        self.assertIn("Внутренний обзор", response.text)
-        self.assertIn('data-item-type="client_customization"', response.text)
-        self.assertIn('data-digest-visibility="internal"', response.text)
+        self.assertIn("Техническая итерация", response.text)
+        self.assertIn("Исправление", response.text)
+        self.assertIn("Внутреннее изменение", response.text)
+        self.assertIn("Продуктовое улучшение", response.text)
+        self.assertIn('data-item-type="product_improvement"', response.text)
+        self.assertIn('data-item-category="none"', response.text)
         self.assertIn('for="item_type-client-flow"', response.text)
-        self.assertIn('for="digest_visibility-client-flow"', response.text)
-        self.assertNotIn('data-visibility-filter', response.text)
-        self.assertNotIn('data-type-filter', response.text)
+        self.assertNotIn("Видимость", response.text)
+        self.assertNotIn("Внутренний обзор", response.text)
+        self.assertNotIn('for="digest_visibility-client-flow"', response.text)
+        self.assertIn('data-type-filter', response.text)
+        self.assertIn('data-category-filter', response.text)
+        self.assertIn('value="none" data-category-filter', response.text)
 
     def test_review_page_treats_legacy_change_as_product_improvement(self) -> None:
         from app.models import DigestItem, DigestVisibility, ItemStatus, ItemType
@@ -1428,7 +1430,7 @@ class DigestGuardTests(unittest.TestCase):
         self.assertIn("Продуктовое улучшение", response.text)
         self.assertIn('<option value="product_improvement" selected>Продуктовое улучшение</option>', response.text)
 
-    def test_review_item_rejects_invalid_digest_visibility(self) -> None:
+    def test_review_item_ignores_unsupported_type_but_rejects_invalid_digest_visibility(self) -> None:
         from app.models import DigestItem, DigestVisibility, ItemStatus, ItemType
         from app.storage import replace_release_items
 
