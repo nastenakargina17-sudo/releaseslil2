@@ -26,6 +26,18 @@ LEGACY_METRIC_LABELS = {
 }
 
 
+ITEM_TYPE_LABELS = {
+    ItemType.NEW_FEATURE: "Продуктовое улучшение",
+    ItemType.CHANGE: "Продуктовое улучшение",
+    ItemType.PRODUCT_IMPROVEMENT: "Продуктовое улучшение",
+    ItemType.INTERNAL_CHANGE: "Внутреннее изменение",
+    ItemType.BUGFIX: "Исправление",
+    ItemType.TECHNICAL_IMPROVEMENT: "Техническая итерация",
+    ItemType.CLIENT_CUSTOMIZATION: "Внутреннее изменение",
+    ItemType.RELEASE_CANDIDATE: "Нет",
+}
+
+
 def build_live_digest_content(items: Iterable[DigestItem]) -> dict:
     approved_items = [
         item for item in items
@@ -196,6 +208,8 @@ def _item_payload(item: DigestItem, include_tracker: bool) -> dict:
         "module": item.module,
         "module_icon": _module_icon_key(item.module),
         "type": item.type.value,
+        "type_label": ITEM_TYPE_LABELS.get(item.type, item.type.value),
+        "preview_group": _preview_group_key(item.type),
         "value_category": item.category.value if item.category else "",
         "value_category_label": CLIENT_CATEGORY_LABELS.get(item.category, "") if item.category else "",
         "is_paid_feature": item.is_paid_feature,
@@ -204,6 +218,14 @@ def _item_payload(item: DigestItem, include_tracker: bool) -> dict:
     if include_tracker:
         payload["tracker_urls"] = list(item.tracker_urls)
     return payload
+
+
+def _preview_group_key(item_type: ItemType) -> str:
+    if item_type in {ItemType.BUGFIX, ItemType.TECHNICAL_IMPROVEMENT}:
+        return "support"
+    if item_type == ItemType.INTERNAL_CHANGE:
+        return "internal"
+    return "product"
 
 
 def _module_icon_key(module: str) -> str:

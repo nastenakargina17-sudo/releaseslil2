@@ -1134,6 +1134,115 @@ class DigestGuardTests(unittest.TestCase):
         self.assertNotIn("<span>Новые функции</span>", response.text)
         self.assertNotIn("<span>Улучшения</span>", response.text)
 
+    def test_preview_renders_task_type_badges_and_group_filters(self) -> None:
+        self.storage.replace_release_items(
+            "2026-04",
+            [
+                DigestItem(
+                    id="product-approved",
+                    release_id="2026-04",
+                    source_item_ids=["DEV-60"],
+                    title="Product update",
+                    description="Do not change product description.",
+                    module="Подбор",
+                    type=ItemType.PRODUCT_IMPROVEMENT,
+                    digest_visibility=DigestVisibility.PUBLIC,
+                    category=None,
+                    status=ItemStatus.APPROVED,
+                    grouping_mode=GroupingMode.SINGLE_TASK,
+                ),
+                DigestItem(
+                    id="internal-approved",
+                    release_id="2026-04",
+                    source_item_ids=["DEV-61"],
+                    title="Internal update",
+                    description="Do not change internal description.",
+                    module="Админка",
+                    type=ItemType.INTERNAL_CHANGE,
+                    digest_visibility=DigestVisibility.PUBLIC,
+                    category=None,
+                    status=ItemStatus.APPROVED,
+                    grouping_mode=GroupingMode.SINGLE_TASK,
+                ),
+                DigestItem(
+                    id="bugfix-approved",
+                    release_id="2026-04",
+                    source_item_ids=["DEV-62"],
+                    title="Fixed stability",
+                    description="",
+                    module="Ядро",
+                    type=ItemType.BUGFIX,
+                    digest_visibility=DigestVisibility.PUBLIC,
+                    category=None,
+                    status=ItemStatus.APPROVED,
+                    grouping_mode=GroupingMode.SINGLE_TASK,
+                    tracker_urls=["https://tracker.yandex.ru/DEV-62"],
+                ),
+            ],
+        )
+        self._set_release_preview_ready()
+
+        response = self.client.get("/review/2026-04/digest-preview")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('data-preview-filter-value="product"', response.text)
+        self.assertIn(">Продуктовые улучшения<", response.text)
+        self.assertIn('data-preview-filter-value="internal"', response.text)
+        self.assertIn(">Внутренние изменения<", response.text)
+        self.assertIn('data-preview-filter-value="support"', response.text)
+        self.assertIn(">Стабильность и техническая база<", response.text)
+        self.assertIn('data-preview-group="product"', response.text)
+        self.assertIn('data-preview-group="internal"', response.text)
+        self.assertIn('data-preview-group="support"', response.text)
+        self.assertIn('<span class="type-badge">Продуктовое улучшение</span>', response.text)
+        self.assertIn('<span class="type-badge">Внутреннее изменение</span>', response.text)
+        self.assertIn('<span class="type-badge">Исправление</span>', response.text)
+        self.assertIn("Do not change product description.", response.text)
+        self.assertIn("Do not change internal description.", response.text)
+
+    def test_published_digest_does_not_render_preview_filters_or_type_badges(self) -> None:
+        from app.models import PublishedDigest
+
+        self.storage.save_published_digest(
+            PublishedDigest(
+                release_id="2026-04",
+                release_date="2026-04-30",
+                summary="Published summary",
+                content={
+                    "sections": [
+                        {
+                            "id": "improvements",
+                            "title": "Что улучшили",
+                            "collapsed": False,
+                            "items": [
+                                {
+                                    "title": "Published update",
+                                    "description": "Published description",
+                                    "module": "Подбор",
+                                    "module_icon": "hiring",
+                                    "type": "product_improvement",
+                                    "type_label": "Продуктовое улучшение",
+                                    "preview_group": "product",
+                                    "value_category_label": "",
+                                    "is_paid_feature": False,
+                                    "media": [],
+                                }
+                            ],
+                        }
+                    ],
+                    "metrics": {"items_count": 1},
+                },
+                published_by="Employee",
+                published_at="1710000000",
+            )
+        )
+
+        response = self.client.get("/digest/2026-04")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("preview-filters", response.text)
+        self.assertNotIn("type-badge", response.text)
+
     def test_public_fix_renders_in_collapsed_support_section(self) -> None:
         self.storage.replace_release_items(
             "2026-04",

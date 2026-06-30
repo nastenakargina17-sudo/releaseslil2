@@ -90,6 +90,12 @@
     .support-panel .grid { padding: 0 18px 18px; }
     .actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 22px; }
     .button { border: 0; background: var(--accent); color: var(--ink); border-radius: 8px; padding: 11px 16px; font-weight: 700; text-decoration: none; cursor: pointer; }
+    {% if page_mode == "preview" %}
+    .type-badge { display: inline-flex; align-items: center; gap: 7px; border-radius: 999px; padding: 6px 11px; font-weight: 700; font-size: 13px; background: var(--ink); color: var(--white); border: 1px solid rgba(9,8,30,.18); }
+    .preview-filters { display: flex; flex-wrap: wrap; gap: 10px; margin: 24px 0 8px; padding: 14px; border-radius: 8px; background: rgba(19,23,34,.78); border: 1px solid var(--dark-line); backdrop-filter: blur(10px); }
+    .preview-filter { border: 1px solid rgba(255,255,255,.16); border-radius: 8px; padding: 10px 14px; background: rgba(255,255,255,.08); color: var(--white); font-weight: 700; cursor: pointer; }
+    .preview-filter.is-active { background: var(--accent); border-color: var(--accent); color: var(--ink); }
+    {% endif %}
     .media-single, .media-carousel { margin-top: 18px; }
     .media-track { display: grid; grid-auto-flow: column; grid-auto-columns: 100%; overflow-x: auto; scroll-snap-type: x mandatory; gap: 12px; }
     .media-slide { scroll-snap-align: start; }
@@ -170,6 +176,14 @@
       </section>
 
       {% if sections %}
+        {% if page_mode == "preview" %}
+          <div class="preview-filters" data-preview-filters aria-label="Фильтры превью">
+            <button type="button" class="preview-filter is-active" data-preview-filter-value="all">Все</button>
+            <button type="button" class="preview-filter" data-preview-filter-value="product">Продуктовые улучшения</button>
+            <button type="button" class="preview-filter" data-preview-filter-value="internal">Внутренние изменения</button>
+            <button type="button" class="preview-filter" data-preview-filter-value="support">Стабильность и техническая база</button>
+          </div>
+        {% endif %}
         <div class="toc-wrap">
           <p class="toc-title">Оглавление</p>
           <nav class="toc" aria-label="Оглавление">
@@ -182,7 +196,7 @@
       {% endif %}
 
       {% for section in sections %}
-        <section class="section" id="{{ section.id }}">
+        <section class="section" id="{{ section.id }}"{% if page_mode == "preview" %} data-preview-section{% endif %}>
           {% if section.collapsed %}
             <details class="support-panel">
               <summary>
@@ -211,5 +225,29 @@
       {% endfor %}
     {% endif %}
   </main>
+  {% if page_mode == "preview" %}
+    <script>
+      (() => {
+        const filters = Array.from(document.querySelectorAll("[data-preview-filter-value]"));
+        const cards = Array.from(document.querySelectorAll("[data-preview-card]"));
+        const sections = Array.from(document.querySelectorAll("[data-preview-section]"));
+        const applyPreviewFilter = (value) => {
+          cards.forEach((card) => {
+            card.hidden = value !== "all" && card.dataset.previewGroup !== value;
+          });
+          sections.forEach((section) => {
+            const sectionCards = Array.from(section.querySelectorAll("[data-preview-card]"));
+            section.hidden = sectionCards.length > 0 && sectionCards.every((card) => card.hidden);
+          });
+          filters.forEach((button) => {
+            button.classList.toggle("is-active", button.dataset.previewFilterValue === value);
+          });
+        };
+        filters.forEach((button) => {
+          button.addEventListener("click", () => applyPreviewFilter(button.dataset.previewFilterValue || "all"));
+        });
+      })();
+    </script>
+  {% endif %}
 </body>
 </html>
