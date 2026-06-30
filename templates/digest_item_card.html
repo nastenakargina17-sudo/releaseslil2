@@ -1,8 +1,8 @@
-<article class="card card-{{ section.id if section else 'default' }}"{% if page_mode == "preview" %} data-preview-card data-preview-group="{{ item.preview_group|default('product') }}"{% endif %}>
+<article class="card card-{{ section.id if section else 'default' }}"{%- if page_mode == "preview" %} data-preview-card data-preview-group="{{ item.preview_group|default('product') }}"{% endif %}>
   <div class="card-meta">
-    {% if page_mode == "preview" and item.type_label %}
+    {%- if page_mode == "preview" and item.type_label %}
       <span class="type-badge">{{ item.type_label }}</span>
-    {% endif %}
+    {%- endif %}
     <span class="module-chip">
       <span class="module-icon module-icon-{{ item.module_icon or 'module' }}" aria-hidden="true"></span>
       {{ item.module }}
