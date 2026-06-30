@@ -11,6 +11,21 @@ class PublicationError(Exception):
     pass
 
 
+LIVE_METRIC_LABELS = {
+    "items_count": "Всего изменений",
+    "new_features_count": "Продуктовое улучшение",
+    "changes_count": "Внутреннее изменение",
+    "technical_count": "Техническая база",
+}
+
+LEGACY_METRIC_LABELS = {
+    "items_count": "Всего изменений",
+    "new_features_count": "Новые функции",
+    "changes_count": "Улучшения",
+    "technical_count": "Техническая база",
+}
+
+
 def build_live_digest_content(items: Iterable[DigestItem]) -> dict:
     approved_items = [
         item for item in items
@@ -18,6 +33,15 @@ def build_live_digest_content(items: Iterable[DigestItem]) -> dict:
         and item.type != ItemType.RELEASE_CANDIDATE
     ]
     new_feature_items = [item for item in approved_items if item.type == ItemType.NEW_FEATURE]
+    product_improvement_items = [
+        item for item in approved_items
+        if item.type in {
+            ItemType.NEW_FEATURE,
+            ItemType.CHANGE,
+            ItemType.PRODUCT_IMPROVEMENT,
+        }
+    ]
+    internal_change_items = [item for item in approved_items if item.type == ItemType.INTERNAL_CHANGE]
     improvement_items = [
         item for item in approved_items
         if item.type in {
@@ -54,7 +78,7 @@ def build_live_digest_content(items: Iterable[DigestItem]) -> dict:
             "support",
             "Стабильность и техническая база",
             support_items,
-            include_tracker=False,
+            include_tracker=True,
             collapsed=True,
         ),
     ]
@@ -63,11 +87,12 @@ def build_live_digest_content(items: Iterable[DigestItem]) -> dict:
         "sections": visible_sections,
         "metrics": {
             "items_count": len(approved_items),
-            "new_features_count": len(new_feature_items),
-            "changes_count": len(improvement_items),
+            "new_features_count": len(product_improvement_items),
+            "changes_count": len(internal_change_items),
             "technical_count": len(support_items),
-            "product_items_count": len(new_feature_items) + len(improvement_items) + len(client_items),
+            "product_items_count": len(product_improvement_items) + len(internal_change_items) + len(client_items),
         },
+        "metric_labels": LIVE_METRIC_LABELS,
     }
 
 
@@ -103,10 +128,19 @@ def normalize_published_digest_content(content: dict) -> dict:
         for section in sections
     }
     metrics.setdefault("items_count", sum(section_counts.values()))
-    metrics.setdefault("new_features_count", section_counts.get("new_features", 0))
+    metrics.setdefault(
+        "new_features_count",
+        section_counts.get("new_features", 0)
+        + section_counts.get("improvements", section_counts.get("changes", 0)),
+    )
     metrics.setdefault(
         "changes_count",
-        section_counts.get("improvements", section_counts.get("changes", 0)),
+        sum(
+            1
+            for section in sections
+            for item in section["items"]
+            if item.get("type") == ItemType.INTERNAL_CHANGE.value
+        ),
     )
     metrics.setdefault("technical_count", section_counts.get("support", 0))
     metrics.setdefault(
@@ -115,7 +149,8 @@ def normalize_published_digest_content(content: dict) -> dict:
         + section_counts.get("improvements", section_counts.get("changes", 0))
         + section_counts.get("client_scenarios", 0),
     )
-    return {"sections": sections, "metrics": metrics}
+    metric_labels = dict(content.get("metric_labels", LEGACY_METRIC_LABELS))
+    return {"sections": sections, "metrics": metrics, "metric_labels": metric_labels}
 
 
 def _section(section_id: str, title: str, items: list[DigestItem], include_tracker: bool, collapsed: bool = False) -> dict:

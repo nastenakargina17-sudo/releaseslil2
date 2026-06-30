@@ -768,6 +768,7 @@ def digest_preview(request: Request, release_id: str) -> HTMLResponse:
                 "preparation_message": "Preview еще не сформирован",
                 "sections": [],
                 "metrics": {},
+                "metric_labels": {},
                 "review_user": getattr(request.state, "review_session", {}).get("user"),
             },
         )
@@ -780,6 +781,7 @@ def digest_preview(request: Request, release_id: str) -> HTMLResponse:
             "page_mode": "preview",
             "sections": content["sections"],
             "metrics": content["metrics"],
+            "metric_labels": content["metric_labels"],
             "review_user": getattr(request.state, "review_session", {}).get("user"),
         },
     )
@@ -812,6 +814,7 @@ def final_digest(request: Request, release_id: str) -> HTMLResponse:
                 "preparation_message": "Дайджест в подготовке",
                 "sections": [],
                 "metrics": {},
+                "metric_labels": {},
                 "review_user": review_user,
             },
         )
@@ -826,6 +829,7 @@ def final_digest(request: Request, release_id: str) -> HTMLResponse:
             "page_mode": "public",
             "sections": content["sections"],
             "metrics": content["metrics"],
+            "metric_labels": content["metric_labels"],
             "review_user": review_user,
         },
     )

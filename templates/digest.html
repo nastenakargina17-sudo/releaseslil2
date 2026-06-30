@@ -160,10 +160,10 @@
           <aside class="metrics-panel" aria-label="Итоги релиза">
             <p class="metrics-title">Итоги релиза</p>
             <div class="metrics-grid">
-              <div class="metric"><strong>{{ digest_metrics.items_count|default(0) }}</strong><span>Всего изменений</span></div>
-              <div class="metric"><strong>{{ digest_metrics.new_features_count|default(0) }}</strong><span>Новые функции</span></div>
-              <div class="metric"><strong>{{ digest_metrics.changes_count|default(0) }}</strong><span>Улучшения</span></div>
-              <div class="metric"><strong>{{ digest_metrics.technical_count|default(0) }}</strong><span>Техническая база</span></div>
+              <div class="metric"><strong>{{ digest_metrics.items_count|default(0) }}</strong><span>{{ metric_labels.items_count|default("Всего изменений") }}</span></div>
+              <div class="metric"><strong>{{ digest_metrics.new_features_count|default(0) }}</strong><span>{{ metric_labels.new_features_count|default("Новые функции") }}</span></div>
+              <div class="metric"><strong>{{ digest_metrics.changes_count|default(0) }}</strong><span>{{ metric_labels.changes_count|default("Улучшения") }}</span></div>
+              <div class="metric"><strong>{{ digest_metrics.technical_count|default(0) }}</strong><span>{{ metric_labels.technical_count|default("Техническая база") }}</span></div>
             </div>
           </aside>
         </div>

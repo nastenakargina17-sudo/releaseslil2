@@ -477,8 +477,9 @@ class DigestGuardTests(unittest.TestCase):
         items = [
             DigestItem(id="feature", release_id="2026-04", source_item_ids=[], title="Feature", description="Feature text", module="Подбор", type=ItemType.NEW_FEATURE, digest_visibility=DigestVisibility.PUBLIC, category=None, status=ItemStatus.APPROVED),
             DigestItem(id="change", release_id="2026-04", source_item_ids=[], title="Change", description="Change text", module="Интеграции", type=ItemType.PRODUCT_IMPROVEMENT, digest_visibility=DigestVisibility.PUBLIC, category=None, status=ItemStatus.APPROVED),
+            DigestItem(id="internal", release_id="2026-04", source_item_ids=[], title="Internal", description="Internal text", module="Админка", type=ItemType.INTERNAL_CHANGE, digest_visibility=DigestVisibility.PUBLIC, category=None, status=ItemStatus.APPROVED),
             DigestItem(id="client", release_id="2026-04", source_item_ids=[], title="Client", description="Client text", module="AI", type=ItemType.CLIENT_CUSTOMIZATION, digest_visibility=DigestVisibility.PUBLIC, category=None, status=ItemStatus.APPROVED),
-            DigestItem(id="bug", release_id="2026-04", source_item_ids=[], title="Bug", description="", module="Ядро", type=ItemType.BUGFIX, digest_visibility=DigestVisibility.PUBLIC, category=None, status=ItemStatus.APPROVED),
+            DigestItem(id="bug", release_id="2026-04", source_item_ids=[], title="Bug", description="", module="Ядро", type=ItemType.BUGFIX, digest_visibility=DigestVisibility.PUBLIC, category=None, status=ItemStatus.APPROVED, tracker_urls=["https://tracker.yandex.ru/DEV-1"]),
             DigestItem(id="internal-feature", release_id="2026-04", source_item_ids=[], title="Hidden feature", description="", module="Ядро", type=ItemType.NEW_FEATURE, digest_visibility=DigestVisibility.INTERNAL, category=None, status=ItemStatus.APPROVED),
             DigestItem(id="draft", release_id="2026-04", source_item_ids=[], title="Draft", description="", module="Ядро", type=ItemType.NEW_FEATURE, digest_visibility=DigestVisibility.PUBLIC, category=None, status=ItemStatus.DRAFT),
         ]
@@ -488,16 +489,16 @@ class DigestGuardTests(unittest.TestCase):
         self.assertEqual(
             content["metrics"],
             {
-                "items_count": 5,
-                "new_features_count": 2,
+                "items_count": 6,
+                "new_features_count": 3,
                 "changes_count": 1,
                 "technical_count": 1,
-                "product_items_count": 4,
+                "product_items_count": 5,
             },
         )
         improvements = next(section for section in content["sections"] if section["id"] == "improvements")
         self.assertEqual(improvements["title"], "Что улучшили")
-        self.assertEqual(improvements["items_count"], 1)
+        self.assertEqual(improvements["items_count"], 2)
         client_scenarios = next(section for section in content["sections"] if section["id"] == "client_scenarios")
         self.assertEqual(client_scenarios["title"], "Клиентские сценарии")
         self.assertEqual(client_scenarios["items_count"], 1)
@@ -505,6 +506,7 @@ class DigestGuardTests(unittest.TestCase):
         self.assertEqual(support["title"], "Стабильность и техническая база")
         self.assertEqual(support["items_count"], 1)
         self.assertTrue(support["collapsed"])
+        self.assertEqual(support["items"][0]["tracker_urls"], ["https://tracker.yandex.ru/DEV-1"])
         titles = [item["title"] for section in content["sections"] for item in section["items"]]
         self.assertIn("Hidden feature", titles)
 
@@ -883,8 +885,8 @@ class DigestGuardTests(unittest.TestCase):
         self.assertIn("Logo_Skillaz_Black.png", response.text)
         self.assertIn("Итоги релиза", response.text)
         self.assertIn("Всего изменений", response.text)
-        self.assertIn("Новые функции", response.text)
-        self.assertIn("Улучшения", response.text)
+        self.assertIn("Продуктовое улучшение", response.text)
+        self.assertIn("Внутреннее изменение", response.text)
         self.assertIn("Техническая база", response.text)
         self.assertIn('class="module-icon module-icon-integrations"', response.text)
         self.assertIn('class="premium-badge"', response.text)
@@ -1071,7 +1073,7 @@ class DigestGuardTests(unittest.TestCase):
         self.assertIn("New analytics", response.text)
         self.assertNotIn("https://tracker.yandex.ru/DEV-20", response.text)
         self.assertIn("Fixed export", response.text)
-        self.assertNotIn("https://tracker.yandex.ru/DEV-21", response.text)
+        self.assertIn("https://tracker.yandex.ru/DEV-21", response.text)
 
     def test_digest_renders_value_badge_and_paid_feature_badge(self) -> None:
         self.storage.update_item(
@@ -1089,6 +1091,48 @@ class DigestGuardTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("Экономия времени", response.text)
         self.assertIn("Платная функция", response.text)
+
+    def test_digest_metrics_use_product_and_internal_labels(self) -> None:
+        self.storage.replace_release_items(
+            "2026-04",
+            [
+                DigestItem(
+                    id="product-approved",
+                    release_id="2026-04",
+                    source_item_ids=["DEV-50"],
+                    title="Product update",
+                    description="Product update text",
+                    module="Подбор",
+                    type=ItemType.PRODUCT_IMPROVEMENT,
+                    digest_visibility=DigestVisibility.PUBLIC,
+                    category=None,
+                    status=ItemStatus.APPROVED,
+                    grouping_mode=GroupingMode.SINGLE_TASK,
+                ),
+                DigestItem(
+                    id="internal-approved",
+                    release_id="2026-04",
+                    source_item_ids=["DEV-51"],
+                    title="Internal update",
+                    description="Internal update text",
+                    module="Админка",
+                    type=ItemType.INTERNAL_CHANGE,
+                    digest_visibility=DigestVisibility.PUBLIC,
+                    category=None,
+                    status=ItemStatus.APPROVED,
+                    grouping_mode=GroupingMode.SINGLE_TASK,
+                ),
+            ],
+        )
+        self._set_release_preview_ready()
+
+        response = self.client.get("/review/2026-04/digest-preview")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("<span>Продуктовое улучшение</span>", response.text)
+        self.assertIn("<span>Внутреннее изменение</span>", response.text)
+        self.assertNotIn("<span>Новые функции</span>", response.text)
+        self.assertNotIn("<span>Улучшения</span>", response.text)
 
     def test_public_fix_renders_in_collapsed_support_section(self) -> None:
         self.storage.replace_release_items(
@@ -1398,6 +1442,11 @@ class DigestGuardTests(unittest.TestCase):
         self.assertIn("Исправление", response.text)
         self.assertIn("Внутреннее изменение", response.text)
         self.assertIn("Продуктовое улучшение", response.text)
+        self.assertIn('value="internal_change"\n                data-type-filter\n                checked', response.text)
+        self.assertIn('value="product_improvement"\n                data-type-filter\n                checked', response.text)
+        self.assertIn('value="technical_improvement"\n                data-type-filter\n                \n              >', response.text)
+        self.assertIn('value="bugfix"\n                data-type-filter\n                \n              >', response.text)
+        self.assertIn('value="release_candidate"\n                data-type-filter\n                \n              >', response.text)
         self.assertIn('data-item-type="product_improvement"', response.text)
         self.assertIn('data-item-category="none"', response.text)
         self.assertIn('for="item_type-client-flow"', response.text)
