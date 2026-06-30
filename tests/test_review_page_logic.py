@@ -490,17 +490,21 @@ class DigestGuardTests(unittest.TestCase):
             {
                 "items_count": 5,
                 "new_features_count": 2,
-                "changes_count": 2,
-                "technical_count": 0,
-                "product_items_count": 5,
+                "changes_count": 1,
+                "technical_count": 1,
+                "product_items_count": 4,
             },
         )
         improvements = next(section for section in content["sections"] if section["id"] == "improvements")
         self.assertEqual(improvements["title"], "Что улучшили")
-        self.assertEqual(improvements["items_count"], 2)
+        self.assertEqual(improvements["items_count"], 1)
         client_scenarios = next(section for section in content["sections"] if section["id"] == "client_scenarios")
         self.assertEqual(client_scenarios["title"], "Клиентские сценарии")
         self.assertEqual(client_scenarios["items_count"], 1)
+        support = next(section for section in content["sections"] if section["id"] == "support")
+        self.assertEqual(support["title"], "Стабильность и техническая база")
+        self.assertEqual(support["items_count"], 1)
+        self.assertTrue(support["collapsed"])
         titles = [item["title"] for section in content["sections"] for item in section["items"]]
         self.assertIn("Hidden feature", titles)
 
@@ -1086,7 +1090,7 @@ class DigestGuardTests(unittest.TestCase):
         self.assertIn("Экономия времени", response.text)
         self.assertIn("Платная функция", response.text)
 
-    def test_public_fix_renders_as_improvement_without_support_section(self) -> None:
+    def test_public_fix_renders_in_collapsed_support_section(self) -> None:
         self.storage.replace_release_items(
             "2026-04",
             [
@@ -1111,9 +1115,9 @@ class DigestGuardTests(unittest.TestCase):
         response = self.client.get("/review/2026-04/digest-preview")
 
         self.assertEqual(response.status_code, 200)
-        self.assertIn("Что улучшили", response.text)
+        self.assertNotIn("Что улучшили", response.text)
+        self.assertIn("Стабильность и техническая база", response.text)
         self.assertIn("Fixed notification", response.text)
-        self.assertNotIn("Стабильность и техническая база", response.text)
 
     def test_digest_omits_empty_publication_sections(self) -> None:
         self.storage.replace_release_items(
@@ -1144,7 +1148,7 @@ class DigestGuardTests(unittest.TestCase):
         self.assertNotIn("Нет изменений", response.text)
         self.assertNotIn('id="new-features-heading"', response.text)
         self.assertNotIn('id="changes-heading"', response.text)
-        self.assertIn("Что улучшили", response.text)
+        self.assertIn("Стабильность и техническая база", response.text)
 
     def test_item_save_supports_ajax_without_redirect(self) -> None:
         item = self.storage.get_item("item-1")

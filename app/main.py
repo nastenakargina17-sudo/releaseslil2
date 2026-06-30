@@ -324,7 +324,10 @@ def review_release(request: Request, release_id: str) -> HTMLResponse:
     if release is None:
         raise HTTPException(status_code=404, detail="Release not found")
     items = list_items(release_id)
-    primary_items = [item for item in items if item.type != ItemType.RELEASE_CANDIDATE]
+    primary_items = sorted(
+        [item for item in items if item.type != ItemType.RELEASE_CANDIDATE],
+        key=lambda item: item.type in {ItemType.TECHNICAL_IMPROVEMENT, ItemType.BUGFIX},
+    )
     candidate_items = [item for item in items if item.type == ItemType.RELEASE_CANDIDATE]
     flash = request.query_params.get("flash")
     digest_ready = release_is_ready_for_digest(release, items)

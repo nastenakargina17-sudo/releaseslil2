@@ -24,9 +24,11 @@ def build_live_digest_content(items: Iterable[DigestItem]) -> dict:
             ItemType.CHANGE,
             ItemType.PRODUCT_IMPROVEMENT,
             ItemType.INTERNAL_CHANGE,
-            ItemType.BUGFIX,
-            ItemType.TECHNICAL_IMPROVEMENT,
         }
+    ]
+    support_items = [
+        item for item in approved_items
+        if item.type in {ItemType.BUGFIX, ItemType.TECHNICAL_IMPROVEMENT}
     ]
     client_items = [item for item in approved_items if item.type == ItemType.CLIENT_CUSTOMIZATION]
     sections = [
@@ -48,6 +50,13 @@ def build_live_digest_content(items: Iterable[DigestItem]) -> dict:
             client_items,
             include_tracker=False,
         ),
+        _section(
+            "support",
+            "Стабильность и техническая база",
+            support_items,
+            include_tracker=False,
+            collapsed=True,
+        ),
     ]
     visible_sections = [section for section in sections if section["items"]]
     return {
@@ -56,7 +65,7 @@ def build_live_digest_content(items: Iterable[DigestItem]) -> dict:
             "items_count": len(approved_items),
             "new_features_count": len(new_feature_items),
             "changes_count": len(improvement_items),
-            "technical_count": 0,
+            "technical_count": len(support_items),
             "product_items_count": len(new_feature_items) + len(improvement_items) + len(client_items),
         },
     }

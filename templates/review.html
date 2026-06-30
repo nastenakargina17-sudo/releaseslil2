@@ -923,9 +923,14 @@
         </div>
         <div class="filter-row" data-type-filter-bar>
           <span class="filter-label">Тип задачи:</span>
-          {% for item_type in [ItemType.TECHNICAL_IMPROVEMENT, ItemType.BUGFIX, ItemType.INTERNAL_CHANGE, ItemType.PRODUCT_IMPROVEMENT, ItemType.RELEASE_CANDIDATE] %}
+          {% for item_type in [ItemType.INTERNAL_CHANGE, ItemType.PRODUCT_IMPROVEMENT, ItemType.TECHNICAL_IMPROVEMENT, ItemType.BUGFIX, ItemType.RELEASE_CANDIDATE] %}
             <label class="type-filter">
-              <input type="checkbox" value="{{ item_type.value }}" data-type-filter checked>
+              <input
+                type="checkbox"
+                value="{{ item_type.value }}"
+                data-type-filter
+                {% if item_type in [ItemType.INTERNAL_CHANGE, ItemType.PRODUCT_IMPROVEMENT] %}checked{% endif %}
+              >
               {{ item_type_labels[item_type] }}
             </label>
           {% endfor %}
