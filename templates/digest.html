@@ -1,3 +1,4 @@
+{% set digest_asset_prefix = brand_asset_prefix|default("/static/brand") -%}
 <!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -5,8 +6,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Дайджест релиза {{ release.id }}</title>
   <style>
-    @font-face { font-family: "Onest"; src: url("/static/brand/OnestRegular1602-hint.ttf") format("truetype"); font-weight: 400; }
-    @font-face { font-family: "Onest"; src: url("/static/brand/OnestBold1602-hint.ttf") format("truetype"); font-weight: 700; }
+    @font-face { font-family: "Onest"; src: url("{{ digest_asset_prefix }}/OnestRegular1602-hint.ttf") format("truetype"); font-weight: 400; }
+    @font-face { font-family: "Onest"; src: url("{{ digest_asset_prefix }}/OnestBold1602-hint.ttf") format("truetype"); font-weight: 700; }
     :root {
       --white: #FFFFFF;
       --gray: #F4F5F7;
@@ -123,7 +124,7 @@
     {% if page_mode in ["preparation", "preview_unavailable"] %}
       <section class="hero preparation">
         <div class="brand-row">
-          <div class="brand-logo-panel"><img class="brand-logo" src="/static/brand/Logo_Skillaz_Black.png" alt="Skillaz"></div>
+          <div class="brand-logo-panel"><img class="brand-logo" src="{{ digest_asset_prefix }}/Logo_Skillaz_Black.png" alt="Skillaz"></div>
           <div class="product-badge"><span>Подбор</span></div>
         </div>
         <div class="hero-report">
@@ -144,18 +145,18 @@
       {% endif %}
       <section class="hero">
         <div class="brand-row">
-          <div class="brand-logo-panel"><img class="brand-logo" src="/static/brand/Logo_Skillaz_Black.png" alt="Skillaz"></div>
+          <div class="brand-logo-panel"><img class="brand-logo" src="{{ digest_asset_prefix }}/Logo_Skillaz_Black.png" alt="Skillaz"></div>
           <div class="product-badge"><span>Подбор</span></div>
         </div>
         <div class="hero-report">
           <div class="hero-content">
             <p class="eyebrow">Дата релиза: <strong>{{ release.release_date }}</strong></p>
             <h1>Дайджест релиза</h1>
-            <p class="summary">{{ release.summary if page_mode == "preview" else snapshot.summary }}</p>
+            <p class="summary">{{ release.summary if page_mode in ["preview", "export"] else snapshot.summary }}</p>
             {% if page_mode == "preview" %}
               <div class="actions">
-                <form method="post" action="/review/{{ release.id }}/publish-digest">
-                  <button type="submit" class="button">Опубликовать дайджест</button>
+                <form method="post" action="/review/{{ release.id }}/export-digest">
+                  <button type="submit" class="button">Сформировать ZIP</button>
                 </form>
                 <form method="post" action="/review/{{ release.id }}/return-digest-to-review">
                   <button type="submit" class="button">Вернуться к ревью</button>

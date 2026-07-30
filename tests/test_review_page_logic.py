@@ -4,6 +4,7 @@ import json
 import os
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -471,6 +472,224 @@ class DigestGuardTests(unittest.TestCase):
                 uploads_dir=self.config.UPLOADS_DIR,
             )
 
+    def test_static_export_zip_contains_final_html_and_relative_assets(self) -> None:
+        media_source = self.config.UPLOADS_DIR / "screen.png"
+        media_source.write_bytes(b"image-bytes")
+        self.storage.update_item(
+            item_id="item-1",
+            title="Exported feature",
+            description="Exported description",
+            category=ValueCategory.TIME_SAVING.value,
+            status=ItemStatus.APPROVED.value,
+            is_paid_feature=False,
+        )
+        self.storage.add_item_image("item-1", "/uploads/screen.png")
+
+        from app.services.static_export import build_static_digest_zip
+
+        archive_bytes = build_static_digest_zip(
+            release=self.storage.get_release("2026-04"),
+            items=self.storage.list_items("2026-04"),
+            uploads_dir=self.config.UPLOADS_DIR,
+            static_dir=self.config.STATIC_DIR,
+            template_env=self.main.templates.env,
+        )
+
+        with zipfile.ZipFile(io.BytesIO(archive_bytes)) as archive:
+            names = set(archive.namelist())
+            html = archive.read("2026-04/index.html").decode("utf-8")
+            self.assertIn("2026-04/assets/Logo_Skillaz_Black.png", names)
+            self.assertIn("2026-04/assets/OnestRegular1602-hint.ttf", names)
+            self.assertIn("2026-04/assets/OnestBold1602-hint.ttf", names)
+            self.assertIn("2026-04/assets/screen.png", names)
+            self.assertEqual(archive.read("2026-04/assets/screen.png"), b"image-bytes")
+            self.assertIn("Exported feature", html)
+            self.assertIn('src="assets/screen.png"', html)
+            self.assertIn('src="assets/Logo_Skillaz_Black.png"', html)
+            self.assertIn('url("assets/OnestRegular1602-hint.ttf")', html)
+            self.assertNotIn("/uploads/", html)
+            self.assertNotIn("/static/", html)
+            self.assertNotIn("Предпросмотр", html)
+            self.assertNotIn("Опубликовать дайджест", html)
+
+    def test_static_export_uses_collision_safe_media_names(self) -> None:
+        first_dir = self.config.UPLOADS_DIR / "one"
+        second_dir = self.config.UPLOADS_DIR / "two"
+        first_dir.mkdir()
+        second_dir.mkdir()
+        (first_dir / "screen.png").write_bytes(b"first")
+        (second_dir / "screen.png").write_bytes(b"second")
+        self.storage.update_item(
+            item_id="item-1",
+            title="Exported feature",
+            description="Exported description",
+            category="",
+            status=ItemStatus.APPROVED.value,
+            is_paid_feature=False,
+        )
+        self.storage.add_item_image("item-1", "/uploads/one/screen.png")
+        self.storage.add_item_image("item-1", "/uploads/two/screen.png")
+
+        from app.services.static_export import build_static_digest_zip
+
+        archive_bytes = build_static_digest_zip(
+            self.storage.get_release("2026-04"),
+            self.storage.list_items("2026-04"),
+            self.config.UPLOADS_DIR,
+            self.config.STATIC_DIR,
+            self.main.templates.env,
+        )
+
+        with zipfile.ZipFile(io.BytesIO(archive_bytes)) as archive:
+            media_names = sorted(
+                name
+                for name in archive.namelist()
+                if name.startswith("2026-04/assets/screen") and name.endswith(".png")
+            )
+            self.assertEqual(
+                media_names,
+                [
+                    "2026-04/assets/screen-2.png",
+                    "2026-04/assets/screen.png",
+                ],
+            )
+            self.assertEqual(
+                {archive.read(name) for name in media_names},
+                {b"first", b"second"},
+            )
+
+    def test_static_export_fails_when_review_media_is_missing(self) -> None:
+        self.storage.update_item(
+            item_id="item-1",
+            title="Exported feature",
+            description="Exported description",
+            category="",
+            status=ItemStatus.APPROVED.value,
+            is_paid_feature=False,
+        )
+        self.storage.add_item_image("item-1", "/uploads/missing.png")
+
+        from app.services.static_export import StaticExportError, build_static_digest_zip
+
+        with self.assertRaises(StaticExportError):
+            build_static_digest_zip(
+                self.storage.get_release("2026-04"),
+                self.storage.list_items("2026-04"),
+                self.config.UPLOADS_DIR,
+                self.config.STATIC_DIR,
+                self.main.templates.env,
+            )
+
+    def test_export_endpoint_downloads_zip_without_publishing_release(self) -> None:
+        self.storage.update_item(
+            item_id="item-1",
+            title="Exported feature",
+            description="Exported description",
+            category="",
+            status=ItemStatus.APPROVED.value,
+            is_paid_feature=False,
+        )
+        self._set_release_preview_ready()
+
+        response = self.client.post(
+            "/review/2026-04/export-digest",
+            follow_redirects=False,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["content-type"], "application/zip")
+        self.assertIn('filename="2026-04.zip"', response.headers["content-disposition"])
+        with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
+            self.assertIn("2026-04/index.html", archive.namelist())
+        release = self.storage.get_release("2026-04")
+        self.assertEqual(release.publication_status, PublicationStatus.PREVIEW)
+        self.assertIsNone(self.storage.get_published_digest("2026-04"))
+
+    def test_export_endpoint_requires_ready_preview(self) -> None:
+        response = self.client.post(
+            "/review/2026-04/export-digest",
+            follow_redirects=False,
+        )
+
+        self.assertEqual(response.status_code, 303)
+        self.assertEqual(
+            response.headers["location"],
+            "/review/2026-04?flash=preview_required",
+        )
+
+    def test_export_endpoint_redirects_when_media_is_missing(self) -> None:
+        self.storage.update_item(
+            item_id="item-1",
+            title="Exported feature",
+            description="Exported description",
+            category="",
+            status=ItemStatus.APPROVED.value,
+            is_paid_feature=False,
+        )
+        self.storage.add_item_image("item-1", "/uploads/missing.png")
+        self._set_release_preview_ready()
+
+        response = self.client.post(
+            "/review/2026-04/export-digest",
+            follow_redirects=False,
+        )
+
+        self.assertEqual(response.status_code, 303)
+        self.assertEqual(
+            response.headers["location"],
+            "/review/2026-04?flash=export_media_error",
+        )
+        self.assertEqual(
+            self.storage.get_release("2026-04").publication_status,
+            PublicationStatus.PREVIEW,
+        )
+
+    def test_digest_can_be_edited_and_exported_again(self) -> None:
+        self.storage.update_item(
+            item_id="item-1",
+            title="First export",
+            description="Export description",
+            category="",
+            status=ItemStatus.APPROVED.value,
+            is_paid_feature=False,
+        )
+        self._set_release_preview_ready()
+
+        first_response = self.client.post("/review/2026-04/export-digest")
+        with zipfile.ZipFile(io.BytesIO(first_response.content)) as archive:
+            first_html = archive.read("2026-04/index.html").decode("utf-8")
+        self.assertIn("First export", first_html)
+
+        return_response = self.client.post(
+            "/review/2026-04/return-digest-to-review",
+            follow_redirects=False,
+        )
+        self.assertEqual(return_response.status_code, 303)
+        item = self.storage.get_item("item-1")
+        edit_response = self.client.post(
+            "/review/2026-04/items/item-1",
+            data={
+                "title": "Second export",
+                "description": "Updated export description",
+                "category": "",
+                "status": "approved",
+                "object_version": str(item.version),
+            },
+            follow_redirects=False,
+        )
+        self.assertEqual(edit_response.status_code, 303)
+        self._set_release_preview_ready()
+
+        second_response = self.client.post("/review/2026-04/export-digest")
+        with zipfile.ZipFile(io.BytesIO(second_response.content)) as archive:
+            second_html = archive.read("2026-04/index.html").decode("utf-8")
+        self.assertIn("Second export", second_html)
+        self.assertNotIn("First export", second_html)
+        self.assertEqual(
+            self.storage.get_release("2026-04").publication_status,
+            PublicationStatus.PREVIEW,
+        )
+
     def test_live_digest_metrics_count_release_categories_without_visibility_split(self) -> None:
         from app.services.publication import build_live_digest_content
 
@@ -641,7 +860,9 @@ class DigestGuardTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("Предпросмотр", response.text)
         self.assertIn("Preview feature", response.text)
-        self.assertIn("Опубликовать дайджест", response.text)
+        self.assertIn("Сформировать ZIP", response.text)
+        self.assertIn('action="/review/2026-04/export-digest"', response.text)
+        self.assertNotIn("Опубликовать дайджест", response.text)
 
     def test_public_digest_reads_published_snapshot_not_live_review(self) -> None:
         from app.models import PublishedDigest
@@ -730,7 +951,7 @@ class DigestGuardTests(unittest.TestCase):
         self.assertIn("Сформировать preview", response.text)
         self.assertNotIn("Отправить готовый дайджест в Telegram", response.text)
 
-    def test_review_page_shows_publish_action_in_preview_state(self) -> None:
+    def test_review_page_shows_repeatable_export_action_in_preview_state(self) -> None:
         self.storage.update_release_publication_status(
             "2026-04",
             PublicationStatus.PREVIEW,
@@ -742,8 +963,17 @@ class DigestGuardTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn("Открыть preview", response.text)
-        self.assertIn("Опубликовать дайджест", response.text)
-        self.assertIn("зафиксирует версию и закроет релиз", response.text)
+        self.assertIn("Сформировать ZIP", response.text)
+        self.assertIn('action="/review/2026-04/export-digest"', response.text)
+        self.assertIn("можно сформировать повторно", response.text)
+        self.assertNotIn("зафиксирует версию и закроет релиз", response.text)
+
+    def test_review_page_explains_export_failure(self) -> None:
+        response = self.client.get("/review/2026-04?flash=export_media_error")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Не удалось сформировать ZIP", response.text)
+        self.assertIn("медиафайлов", response.text)
 
     def test_review_page_shows_published_audit_and_open_digest_action(self) -> None:
         self.storage.update_release_publication_status(

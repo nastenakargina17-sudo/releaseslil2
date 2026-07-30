@@ -884,13 +884,13 @@
             <a href="/digest/{{ release.id }}" class="button button-primary">Открыть опубликованный дайджест</a>
           {% elif release.publication_status.value == "preview" %}
             <a href="/review/{{ release.id }}/digest-preview" class="button button-primary">Открыть preview</a>
-            <form method="post" action="/review/{{ release.id }}/publish-digest">
-              <button type="submit" class="button button-dark" {% if not digest_ready %}disabled{% endif %}>Опубликовать дайджест</button>
+            <form method="post" action="/review/{{ release.id }}/export-digest">
+              <button type="submit" class="button button-dark" {% if not digest_ready %}disabled{% endif %}>Сформировать ZIP</button>
             </form>
             <form method="post" action="/review/{{ release.id }}/return-digest-to-review">
               <button type="submit" class="button button-subtle">Вернуться к ревью</button>
             </form>
-            <small class="publish-hint">Публикация зафиксирует версию и закроет релиз от редактирования.</small>
+            <small class="publish-hint">ZIP можно сформировать повторно после изменений; релиз останется доступен для редактирования.</small>
           {% else %}
             <form method="post" action="/review/{{ release.id }}/prepare-digest-preview" id="confirm-digest-button" data-release-id="{{ release.id }}">
               <button type="submit" class="button button-primary">Сформировать preview</button>
@@ -969,6 +969,8 @@
       <div class="flash error">Сначала сформируйте preview и проверьте его перед публикацией.</div>
     {% elif flash == "publish_media_error" %}
       <div class="flash error">Не удалось опубликовать дайджест: один из медиафайлов недоступен.</div>
+    {% elif flash == "export_media_error" %}
+      <div class="flash error">Не удалось сформировать ZIP: один из медиафайлов или файлов оформления недоступен.</div>
     {% elif flash == "release_published" %}
       <div class="flash success">Дайджест уже опубликован. Редактирование закрыто.</div>
     {% endif %}

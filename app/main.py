@@ -61,6 +61,7 @@ from app.services.publication import (
     build_published_digest_snapshot,
     normalize_published_digest_content,
 )
+from app.services.static_export import StaticExportError, build_static_digest_zip
 from app.services.telegram_bot import TelegramBotService
 from app.session import clear_session, load_session, save_session
 from app.storage import (
@@ -749,6 +750,41 @@ def publish_digest(request: Request, release_id: str) -> RedirectResponse:
         published_by=owner_name,
     )
     return RedirectResponse(url=f"/digest/{release_id}", status_code=303)
+
+
+@app.post("/review/{release_id}/export-digest")
+def export_digest(release_id: str) -> Response:
+    release = get_release(release_id)
+    if release is None:
+        raise HTTPException(status_code=404, detail="Release not found")
+    items = list_items(release_id)
+    if release.publication_status != PublicationStatus.PREVIEW or digest_blockers(release, items):
+        return RedirectResponse(
+            url=f"/review/{release_id}?flash=preview_required",
+            status_code=303,
+        )
+    try:
+        archive = build_static_digest_zip(
+            release=release,
+            items=items,
+            uploads_dir=UPLOADS_DIR,
+            static_dir=STATIC_DIR,
+            template_env=templates.env,
+        )
+    except StaticExportError:
+        return RedirectResponse(
+            url=f"/review/{release_id}?flash=export_media_error",
+            status_code=303,
+        )
+    safe_filename = "".join(
+        character if character.isalnum() or character in {"-", "_"} else "-"
+        for character in release_id
+    ).strip("-") or "digest"
+    return Response(
+        content=archive,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{safe_filename}.zip"'},
+    )
 
 
 @app.get("/review/{release_id}/digest-preview", response_class=HTMLResponse)
