@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json.schemastore.org/wrangler.json",
+  "name": "releasecraft-proxy",
+  "main": "src/index.js",
+  "compatibility_date": "2026-07-29",
+  "workers_dev": true,
+  "observability": {
+    "enabled": true
+  }
+}
