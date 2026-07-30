@@ -7,7 +7,7 @@ from typing import FrozenSet
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
 TEMPLATES_DIR = BASE_DIR / "templates"
-UPLOADS_DIR = BASE_DIR / "uploads"
+UPLOADS_DIR = Path(os.getenv("UPLOADS_DIR", str(BASE_DIR / "uploads")))
 STATIC_DIR = BASE_DIR / "static"
 DB_PATH = DATA_DIR / "release_digest.db"
 ENV_PATH = BASE_DIR / ".env"
